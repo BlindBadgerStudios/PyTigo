@@ -128,3 +128,69 @@ class TigoRangeData:
     categories: list[TigoRangeCategory]
     series: list[TigoRangeSeries]
     raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoDateInfo:
+    date: date
+    sunrise: float | None
+    sunset: float | None
+    sunrise_time: str | None
+    sunset_time: str | None
+    light: float | None
+    dark: float | None
+    timezone: str | None
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoMinuteData:
+    last_data: datetime | None
+    data_date: datetime | None
+    data_type: str | None
+    sunrise: float | None
+    sunset: float | None
+    light: float | None
+    dark: float | None
+    dataset: list[Any]
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoAdvancedData:
+    headers: list[str]
+    series: list[dict[str, Any]]
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoSystemView:
+    has_monitored_modules: bool
+    date: datetime | None
+    latest: datetime | None
+    channel: str | None
+    timeframe: int | None
+    timezone: str | None
+    has_basic: bool | None
+    first_day: datetime | None
+    last_day_with_data: datetime | None
+    config_url: str | None
+    range_data_url: str | None
+    month_data_url: str | None
+    date_info_url: str | None
+    minute_data_url: str | None
+    summary_url: str | None
+    agg_energy_url: str | None
+    advanced_data_url: str | None
+    urgent_url: str | None
+    background_update_url: str | None
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoAlertsMetadata:
+    system_id: int | None
+    detail_url: str | None
+    archive_url: str | None
+    no_alerts: bool
+    raw: dict[str, Any] = field(default_factory=dict)

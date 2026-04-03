@@ -1,20 +1,22 @@
 from __future__ import annotations
 
-from datetime import date
-from typing import Any
-
 import requests
 
 from .models import TigoOverview, TigoSystemInfo, TigoSystemTopology
 from .parsing import (
     extract_csrf_token,
     extract_default_system_id,
+    parse_advanced_data,
+    parse_alerts_page,
     parse_daily_energy,
+    parse_date_info,
     parse_info_page,
+    parse_minute_data,
     parse_overview_page,
     parse_range_data,
     parse_summary,
     parse_system_topology,
+    parse_system_view_page,
 )
 
 
@@ -39,7 +41,6 @@ class TigoClient:
         login_page = self.session.get(self.portal_url, timeout=self.timeout)
         login_page.raise_for_status()
         csrf_token = extract_csrf_token(login_page.text)
-
         response = self.session.post(
             self.portal_url.rstrip("/") + "/site/login",
             data={
@@ -61,6 +62,16 @@ class TigoClient:
             raise ValueError("No system_id provided and client is not logged in")
         return resolved
 
+    def _get(self, path: str, *, system_id: int | None = None, extra_query: str = ""):
+        resolved = self._require_system_id(system_id)
+        separator = "&" if "?" in path else "?"
+        suffix = f"{separator}sysid={resolved}"
+        if extra_query:
+            suffix += f"&{extra_query.lstrip('&?')}"
+        response = self.session.get(f"https://ei.tigoenergy.com{path}{suffix}", timeout=self.timeout)
+        response.raise_for_status()
+        return response
+
     def get_overview(self, system_id: int | None = None) -> TigoOverview:
         resolved = self._require_system_id(system_id)
         response = self.session.get(
@@ -71,41 +82,17 @@ class TigoClient:
         return parse_overview_page(response.text)
 
     def get_system_info(self, system_id: int | None = None) -> TigoSystemInfo:
-        resolved = self._require_system_id(system_id)
-        response = self.session.get(
-            f"https://ei.tigoenergy.com/fleet/system/info/index?sysid={resolved}",
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return parse_info_page(response.text)
+        return parse_info_page(self._get("/fleet/system/info/index", system_id=system_id).text)
 
     def get_system_topology(self, system_id: int | None = None) -> TigoSystemTopology:
-        resolved = self._require_system_id(system_id)
-        response = self.session.get(
-            f"https://ei.tigoenergy.com/config/editor?sysid={resolved}",
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return parse_system_topology(response.json())
+        return parse_system_topology(self._get("/config/editor", system_id=system_id).json())
 
     def get_daily_energy(self, system_id: int | None = None):
-        resolved = self._require_system_id(system_id)
-        response = self.session.get(
-            f"https://ei.tigoenergy.com/data/daily-energy?sysid={resolved}",
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return parse_daily_energy(response.json())
+        return parse_daily_energy(self._get("/data/daily-energy", system_id=system_id).json())
 
     def get_summary(self, target_date: str | None = None, system_id: int | None = None):
-        resolved = self._require_system_id(system_id)
-        query_suffix = f"&date={target_date}" if target_date else ""
-        response = self.session.get(
-            f"https://ei.tigoenergy.com/data/summary?sysid={resolved}{query_suffix}",
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return parse_summary(response.json())
+        extra = f"date={target_date}" if target_date else ""
+        return parse_summary(self._get("/data/summary", system_id=system_id, extra_query=extra).json())
 
     def get_range_data(
         self,
@@ -113,16 +100,25 @@ class TigoClient:
         end_date: str | None = None,
         system_id: int | None = None,
     ):
-        resolved = self._require_system_id(system_id)
-        params = []
+        params: list[str] = []
         if start_date:
             params.append(f"startDate={start_date}")
         if end_date:
             params.append(f"endDate={end_date}")
-        suffix = ("&" + "&".join(params)) if params else ""
-        response = self.session.get(
-            f"https://ei.tigoenergy.com/data/range-data?sysid={resolved}{suffix}",
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return parse_range_data(response.json())
+        return parse_range_data(self._get("/data/range-data", system_id=system_id, extra_query="&".join(params)).json())
+
+    def get_date_info(self, target_date: str, system_id: int | None = None):
+        return parse_date_info(self._get("/data/date-info", system_id=system_id, extra_query=f"date={target_date}").json())
+
+    def get_minute_data(self, target_date: str, minute: str, system_id: int | None = None):
+        extra = f"date={target_date}&minute={minute}"
+        return parse_minute_data(self._get("/data/minute-data", system_id=system_id, extra_query=extra).json())
+
+    def get_advanced_data(self, target_date: str, system_id: int | None = None):
+        return parse_advanced_data(self._get("/data/advanced", system_id=system_id, extra_query=f"date={target_date}").json())
+
+    def get_system_view(self, system_id: int | None = None):
+        return parse_system_view_page(self._get("/fleet/system/view/index", system_id=system_id).text)
+
+    def get_alerts_metadata(self, system_id: int | None = None):
+        return parse_alerts_page(self._get("/fleet/system/alerts/index", system_id=system_id).text)

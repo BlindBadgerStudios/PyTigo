@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import asdict
 from datetime import date, datetime
 from html import unescape
 from html.parser import HTMLParser
@@ -10,8 +9,12 @@ from urllib.parse import parse_qs, urlparse
 
 from .models import (
     DailyEnergyPoint,
+    TigoAdvancedData,
+    TigoAlertsMetadata,
     TigoCloudConnect,
+    TigoDateInfo,
     TigoInverter,
+    TigoMinuteData,
     TigoModuleSummary,
     TigoObject,
     TigoOverview,
@@ -21,6 +24,7 @@ from .models import (
     TigoSummary,
     TigoSystemInfo,
     TigoSystemTopology,
+    TigoSystemView,
 )
 
 
@@ -47,6 +51,21 @@ def _extract_js_object(html: str, variable_name: str) -> dict:
         raise ValueError(f"Could not locate JavaScript object {variable_name}")
     raw_json = match.group(1).replace(r"\/", "/")
     return json.loads(raw_json)
+
+
+def _extract_js_string(html: str, variable_name: str) -> str | None:
+    match = re.search(rf'var\s+{re.escape(variable_name)}\s*=\s*"([^"]*)";', html)
+    if not match:
+        return None
+    return match.group(1).replace(r"\/", "/")
+
+
+def _parse_optional_datetime(value: str | None, fmt: str | None = None):
+    if not value:
+        return None
+    if fmt:
+        return datetime.strptime(value, fmt)
+    return datetime.fromisoformat(value)
 
 
 def parse_overview_page(html: str) -> TigoOverview:
@@ -155,7 +174,6 @@ def parse_info_page(html: str) -> TigoSystemInfo:
 def parse_system_topology(payload: dict) -> TigoSystemTopology:
     system = payload["system"]
     labels = {int(key): value for key, value in system["object_labels"].items()}
-
     objects = [
         TigoObject(
             object_id=int(item["A"]),
@@ -177,11 +195,9 @@ def parse_system_topology(payload: dict) -> TigoSystemTopology:
     by_type: dict[str, list[TigoObject]] = {}
     for obj in objects:
         by_type.setdefault(obj.type_label, []).append(obj)
-
     roots = [obj for obj in objects if obj.parent_id is None]
     if not roots:
         raise ValueError("Topology payload did not contain a root system object")
-
     return TigoSystemTopology(
         labels=labels,
         root=roots[0],
@@ -198,14 +214,6 @@ def parse_daily_energy(payload: dict[str, float | int]) -> list[DailyEnergyPoint
         DailyEnergyPoint(date=date.fromisoformat(day), energy_wh=float(value))
         for day, value in sorted(payload.items())
     ]
-
-
-def _parse_optional_datetime(value: str | None, fmt: str | None = None):
-    if not value:
-        return None
-    if fmt:
-        return datetime.strptime(value, fmt)
-    return datetime.fromisoformat(value)
 
 
 def parse_summary(payload: dict) -> TigoSummary:
@@ -236,3 +244,78 @@ def parse_range_data(payload: dict) -> TigoRangeData:
     ]
     unit = series[0].unit if series else None
     return TigoRangeData(unit=unit, categories=categories, series=series, raw=payload)
+
+
+def parse_date_info(payload: dict[str, dict]) -> TigoDateInfo:
+    day, info = next(iter(payload.items()))
+    return TigoDateInfo(
+        date=date.fromisoformat(day),
+        sunrise=info.get("sunrise"),
+        sunset=info.get("sunset"),
+        sunrise_time=info.get("sunrise_time"),
+        sunset_time=info.get("sunset_time"),
+        light=info.get("light"),
+        dark=info.get("dark"),
+        timezone=info.get("timezone"),
+        raw=payload,
+    )
+
+
+def parse_minute_data(payload: dict) -> TigoMinuteData:
+    return TigoMinuteData(
+        last_data=_parse_optional_datetime(payload.get("lastData"), "%Y-%m-%d %H:%M:%S"),
+        data_date=_parse_optional_datetime(payload.get("dataDate"), "%Y-%m-%d %H:%M:%S"),
+        data_type=payload.get("dataType"),
+        sunrise=payload.get("sunrise"),
+        sunset=payload.get("sunset"),
+        light=payload.get("light"),
+        dark=payload.get("dark"),
+        dataset=list(payload.get("dataset", [])),
+        raw=payload,
+    )
+
+
+def parse_advanced_data(payload: dict) -> TigoAdvancedData:
+    series = list(payload.get("s", []))
+    headers = list(series[0].get("h", [])) if series else []
+    return TigoAdvancedData(headers=headers, series=series, raw=payload)
+
+
+def parse_system_view_page(html: str) -> TigoSystemView:
+    config = _extract_js_object(html, "arrayConfig")
+    return TigoSystemView(
+        has_monitored_modules=bool(config.get("hasMonitoredModules")),
+        date=_parse_optional_datetime(config.get("date"), "%Y-%m-%d %H:%M:%S"),
+        latest=_parse_optional_datetime(config.get("latest"), "%Y-%m-%d %H:%M:%S"),
+        channel=config.get("channel"),
+        timeframe=config.get("timeframe"),
+        timezone=config.get("timezone"),
+        has_basic=config.get("has_basic"),
+        first_day=_parse_optional_datetime(config.get("first_day")),
+        last_day_with_data=_parse_optional_datetime(config.get("last_day_with_data"), "%Y-%m-%d %H:%M:%S"),
+        config_url=_extract_js_string(html, "config_url"),
+        range_data_url=_extract_js_string(html, "rangedata_url"),
+        month_data_url=_extract_js_string(html, "monthdata_url"),
+        date_info_url=_extract_js_string(html, "dateinfo_url"),
+        minute_data_url=_extract_js_string(html, "minutedata_url"),
+        summary_url=_extract_js_string(html, "datedata_url"),
+        agg_energy_url=_extract_js_string(html, "aggEnergyUrl"),
+        advanced_data_url=_extract_js_string(html, "chartdownload_url"),
+        urgent_url=_extract_js_string(html, "urgent_url"),
+        background_update_url=_extract_js_string(html, "background_update_url"),
+        raw=config,
+    )
+
+
+def parse_alerts_page(html: str) -> TigoAlertsMetadata:
+    tokens = _tokens(html)
+    system_id_match = re.search(r'var\s+sysid\s*=\s*"(\d+)";', html)
+    system_id = int(system_id_match.group(1)) if system_id_match else None
+    raw = _extract_js_object(html, "ALERTSNOCONFLICT")
+    return TigoAlertsMetadata(
+        system_id=system_id,
+        detail_url=raw.get("detail_url"),
+        archive_url=raw.get("archive_url"),
+        no_alerts="No alerts for this system" in tokens,
+        raw=raw,
+    )
