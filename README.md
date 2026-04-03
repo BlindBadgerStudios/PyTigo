@@ -18,6 +18,12 @@ What it currently supports:
 pip install -e .
 ```
 
+Metadata polish included in this repo:
+- MIT license
+- package homepage / repository / issues links
+- PyPI-friendly classifiers and keywords
+- explicit author metadata
+
 ## Quick start
 
 ```python
