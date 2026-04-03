@@ -7,7 +7,7 @@ from typing import Any, Generic, TypeVar
 T = TypeVar("T")
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoAuth:
     user_id: int
     auth_token: str
@@ -18,7 +18,7 @@ class TigoAuth:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoUser:
     user_id: int
     login: str | None
@@ -38,7 +38,7 @@ class TigoUser:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoSystem:
     system_id: int
     external_id: str | None
@@ -64,7 +64,7 @@ class TigoSystem:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoPanelLayout:
     panel_id: int
     label: str | None
@@ -77,7 +77,7 @@ class TigoPanelLayout:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoStringLayout:
     string_id: int
     label: str | None
@@ -87,7 +87,7 @@ class TigoStringLayout:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoMpptLayout:
     mppt_id: int
     label: str | None
@@ -95,7 +95,7 @@ class TigoMpptLayout:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoInverterLayout:
     inverter_id: int
     inverter_type_id: int | None
@@ -107,14 +107,14 @@ class TigoInverterLayout:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoSystemLayout:
     system_id: int
     inverters: list[TigoInverterLayout]
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoObjectUI:
     x: float | None = None
     y: float | None = None
@@ -129,7 +129,7 @@ class TigoObjectUI:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoObjectNode:
     object_id: int
     label: str | None
@@ -141,14 +141,14 @@ class TigoObjectNode:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoObjectType:
     object_type_id: int
     label: str
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoSourceSet:
     set_name: str
     last_min: datetime | None
@@ -157,7 +157,7 @@ class TigoSourceSet:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoSource:
     source_id: int
     name: str | None
@@ -177,7 +177,7 @@ class TigoSource:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoSummary:
     lifetime_energy_dc: float | None
     ytd_energy_dc: float | None
@@ -187,7 +187,7 @@ class TigoSummary:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoAlert:
     alert_id: int
     added: datetime | None
@@ -200,7 +200,7 @@ class TigoAlert:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoAlertType:
     alert_type_id: int
     title: str | None
@@ -219,13 +219,13 @@ class TigoPage(Generic[T]):
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoCSVRow:
     timestamp: datetime | None
     values: dict[str, float | str | None]
 
 
-@dataclass(slots=True)
+@dataclass
 class TigoCSVTable:
     headers: list[str]
     rows: list[TigoCSVRow]

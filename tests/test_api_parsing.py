@@ -1,5 +1,6 @@
 from datetime import date, datetime
 
+from pytigo.models import TigoPage
 from pytigo.parsing import (
     parse_alert_types_response,
     parse_alerts_response,
@@ -213,6 +214,18 @@ ALERT_TYPES_JSON = {
     ]
 }
 
+SYSTEMS_PAGINATED_JSON = {
+    "systems": SYSTEMS_JSON["systems"],
+    "_meta": {"total": 42, "page": 2, "limit": 10},
+    "_links": {"self": "/api/v3/systems?page=2", "next": "/api/v3/systems?page=3"},
+}
+
+ALERTS_PAGINATED_JSON = {
+    "alerts": ALERTS_JSON["alerts"],
+    "_meta": {"total": 5, "page": 1, "limit": 200},
+    "_links": {},
+}
+
 CSV_TEXT = "Datetime,1,2\n2026/03/31 00:00:00,2078.8,2069.77\n2026/03/31 00:01:00,,2060\n"
 
 
@@ -228,10 +241,12 @@ def test_parse_login_and_user():
 
 
 def test_parse_systems_and_system():
-    systems = parse_systems_response(SYSTEMS_JSON)
-    assert len(systems) == 1
-    assert systems[0].system_id == 424242
-    assert systems[0].turn_on_date == date(2024, 9, 24)
+    page = parse_systems_response(SYSTEMS_JSON)
+    assert isinstance(page, TigoPage)
+    assert len(page.items) == 1
+    assert page.total is None
+    assert page.items[0].system_id == 424242
+    assert page.items[0].turn_on_date == date(2024, 9, 24)
 
     system = parse_system_response(SYSTEM_JSON)
     assert system.name == "Example Site"
@@ -258,7 +273,9 @@ def test_parse_layout_objects_sources_summary_and_csv():
     assert summary.daily_energy_dc == 105885.47
 
     alerts = parse_alerts_response(ALERTS_JSON)
-    assert alerts[0].title == "Tigo Alert: String Shutdown"
+    assert isinstance(alerts, TigoPage)
+    assert alerts.total is None
+    assert alerts.items[0].title == "Tigo Alert: String Shutdown"
 
     alert_types = parse_alert_types_response(ALERT_TYPES_JSON)
     assert alert_types[0].unique_id == 300
@@ -268,3 +285,32 @@ def test_parse_layout_objects_sources_summary_and_csv():
     assert csv_table.rows[0].values["1"] == 2078.8
     assert csv_table.rows[1].values["1"] is None
     assert csv_table.rows[1].values["2"] == 2060.0
+
+
+def test_parse_pagination_envelope():
+    # Systems: _meta and _links are extracted into TigoPage fields
+    page = parse_systems_response(SYSTEMS_PAGINATED_JSON)
+    assert isinstance(page, TigoPage)
+    assert page.total == 42
+    assert page.page == 2
+    assert page.limit == 10
+    assert page.links["next"] == "/api/v3/systems?page=3"
+    assert len(page.items) == 1
+    assert page.items[0].system_id == 424242
+
+    # Alerts: _meta extracted, empty _links is tolerated
+    alerts_page = parse_alerts_response(ALERTS_PAGINATED_JSON)
+    assert isinstance(alerts_page, TigoPage)
+    assert alerts_page.total == 5
+    assert alerts_page.page == 1
+    assert alerts_page.limit == 200
+    assert alerts_page.links == {}
+    assert alerts_page.items[0].unique_id == 106
+
+    # No envelope: all pagination fields are None / empty
+    bare = parse_systems_response({"systems": []})
+    assert bare.total is None
+    assert bare.page is None
+    assert bare.limit is None
+    assert bare.links == {}
+    assert bare.items == []
