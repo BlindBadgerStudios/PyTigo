@@ -1,21 +1,25 @@
 # pytigo
 
-pytigo is a small Python client for authenticating against the Tigo EI portal and pulling system, panel, and production data.
+pytigo is a Python client for the documented Tigo REST API v3.
 
-What it currently supports:
-- portal login with the same CSRF + form flow used by https://ei.tigoenergy.com/
-- automatic discovery of the default `system_id` from the post-login redirect
-- system overview bootstrap parsing
-- system info page parsing
-- topology parsing from the layout editor config endpoint
-- daily energy history
-- summary data
-- range chart data
-- date-info data
-- minute-data payloads
-- advanced data headers/payloads
-- system view bootstrap/config parsing
-- alerts page metadata parsing
+It is now centered on the official API described in Tigo-API-V3.pdf, using:
+- base URL: https://api2.tigoenergy.com/api/v3/
+- token auth from `users/login`
+- documented systems, objects, sources, and data endpoints
+
+Supported official API areas:
+- users/login
+- users/logout
+- users/get
+- systems/list
+- systems/view
+- systems/layout
+- objects/system
+- objects/types
+- sources/system
+- data/summary
+- data/aggregate
+- data/combined
 
 ## Install
 
@@ -23,56 +27,50 @@ What it currently supports:
 pip install -e .
 ```
 
-Metadata polish included in this repo:
-- MIT license
-- package homepage / repository / issues links
-- PyPI-friendly classifiers and keywords
-- explicit author metadata
-
 ## Quick start
 
 ```python
 from pytigo import TigoClient
 
-client = TigoClient(email="you@example.com", password="super-secret")
-system_id = client.login()
+client = TigoClient(username="you@example.com", password="super-secret")
+auth = client.login()
 
-overview = client.get_overview()
-info = client.get_system_info()
-topology = client.get_system_topology()
-daily_energy = client.get_daily_energy()
-summary = client.get_summary(target_date="2026-03-31")
-range_data = client.get_range_data(start_date="2026-03-31", end_date="2026-03-31")
-date_info = client.get_date_info("2026-03-31")
-minute_data = client.get_minute_data("2026-03-31", minute="12:00")
-advanced_data = client.get_advanced_data("2026-03-31")
-system_view = client.get_system_view()
-alerts = client.get_alerts_metadata()
+systems = client.list_systems()
+system = systems[0]
 
-print(system_id)
-print(info.system_name)
-print(len(topology.panels))
-print(daily_energy[-1])
-print(summary.total_agg_energy_wh)
-print(range_data.series[0].name)
-print(date_info.sunrise_time)
-print(minute_data.last_data)
-print(advanced_data.headers[:3])
-print(system_view.channel)
-print(alerts.no_alerts)
+layout = client.get_layout(system.system_id)
+objects = client.get_objects(system.system_id)
+sources = client.get_sources(system.system_id)
+summary = client.get_summary(system.system_id)
+aggregate = client.get_aggregate(
+    system.system_id,
+    start="2026-03-31T00:00:00",
+    end="2026-03-31T23:59:59",
+    level="day",
+    param="Pin",
+)
+combined = client.get_combined(
+    system.system_id,
+    start="2026-03-31T00:00:00",
+    end="2026-03-31T23:59:59",
+    agg="day",
+)
+
+print(auth.user_id)
+print(system.name)
+print(layout.inverters[0].label if layout.inverters else None)
+print(len(objects))
+print(sources[0].serial if sources else None)
+print(summary.daily_energy_dc)
+print(aggregate.rows[0].values)
+print(combined.rows[0].values)
 ```
 
 ## Notes
 
-This library is modeled after the shape of pyemvue in spirit: a simple client object plus parsed Python models around a vendor API surface. Unlike pyemvue, Tigo's authenticated JSON API appears to be split between multiple surfaces, and the most reliable currently reachable endpoints are the EI portal's authenticated web endpoints.
+The library returns typed Python models for JSON endpoints and a parsed table model for CSV-style telemetry endpoints like `data/aggregate` and `data/combined`.
 
-The implementation currently leans on these EI portal paths:
-- `/fleet/system/overview/index`
-- `/fleet/system/info/index`
-- `/config/editor`
-- `/data/daily-energy`
-- `/data/summary`
-- `/data/range-data`
+`data/aggregate` and `data/combined` are especially useful for exporter/monitoring use cases because they preserve timestamped telemetry in a table-shaped format that is easy to flatten for Prometheus, Grafana, or ETL pipelines.
 
 ## Development
 

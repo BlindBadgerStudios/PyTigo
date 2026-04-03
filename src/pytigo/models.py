@@ -6,255 +6,193 @@ from typing import Any
 
 
 @dataclass(slots=True)
-class DailyEnergyPoint:
-    date: date
-    energy_wh: float
-
-
-@dataclass(slots=True)
-class TigoOverview:
-    system_id: int
-    node_aggregate_url: str | None = None
-    node_system_view_url: str | None = None
-    data_lifetime_url: str | None = None
-    weather_url: str | None = None
-    basic_charts_url: str | None = None
-    calendar_url: str | None = None
-    timezone: str | None = None
-    chart_view: str | None = None
-    chart_aggregation: str | None = None
-    first_date: str | None = None
-    last_date: str | None = None
+class TigoAuth:
+    user_id: int
+    auth_token: str
+    expires: datetime | None
+    user_type: str | None
+    refresh_token: str | None = None
+    user_agreement: bool | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
-class TigoCloudConnect:
-    name: str
-    serial: str
-    check_in: str
+class TigoUser:
+    user_id: int
+    login: str | None
+    first_name: str | None
+    last_name: str | None
+    email: str | None
+    company: str | None
+    street: str | None
+    street2: str | None
+    city: str | None
+    state: str | None
+    zip_code: str | None
+    country: str | None
+    mobile: str | None
+    user_type: str | None
+    avatar: str | None
+    raw: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
-class TigoInverter:
-    serial: str
-    label: str
-    model: str
-    manufacturer: str
-    max_power: str
-
-
-@dataclass(slots=True)
-class TigoModuleSummary:
-    model: str
-    manufacturer: str
-    max_power: str
-    count: int
-
-
-@dataclass(slots=True)
-class TigoSystemInfo:
-    system_name: str
+class TigoSystem:
     system_id: int
-    install_date: str
-    peak_power: str
-    location: list[str]
-    cloud_connect: TigoCloudConnect
-    inverters: list[TigoInverter]
-    module_summary: TigoModuleSummary
+    external_id: str | None
+    name: str | None
+    street: str | None
+    city: str | None
+    state: str | None
+    zip_code: str | None
+    country: str | None
+    country_code: str | None
+    latitude: float | None
+    longitude: float | None
+    timezone: str | None
+    power_rating: float | None
+    power_rating_ac: float | None
+    created: datetime | None
+    commissioned: datetime | None
+    decommissioned: datetime | None
+    status: str | None
+    turn_on_date: date | None
+    has_monitored_modules: bool | None
+    recent_alerts_count: int | None
+    raw: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
-class TigoObject:
-    object_id: int
-    type_id: int
-    type_label: str
-    name: str
-    parent_id: int | None = None
-    max_power_watts: float | None = None
+class TigoPanelLayout:
+    panel_id: int
+    label: str | None
+    short_label: str | None
+    serial: str | None
+    panel_type: str | None
+    source_id: int | None
+    object_id: int | None
+    panel_type_id: int | None
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoStringLayout:
+    string_id: int
+    label: str | None
+    short_label: str | None
+    object_id: int | None
+    panels: list[TigoPanelLayout]
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoMpptLayout:
+    mppt_id: int
+    label: str | None
+    strings: list[TigoStringLayout]
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoInverterLayout:
+    inverter_id: int
+    inverter_type_id: int | None
+    label: str | None
+    object_id: int | None
+    source_id: int | None
+    serial: str | None
+    mppts: list[TigoMpptLayout]
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoSystemLayout:
+    system_id: int
+    inverters: list[TigoInverterLayout]
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoObjectUI:
     x: float | None = None
     y: float | None = None
-    angle: float | None = None
-    serial: str | None = None
-    mac: str | None = None
-    vendor_id: int | None = None
+    max_power: float | None = None
+    label: str | None = None
+    x1: float | None = None
+    y1: float | None = None
+    x2: float | None = None
+    y2: float | None = None
+    data_repeat_minutes: float | None = None
+    scale: float | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
-class TigoSystemTopology:
-    labels: dict[int, str]
-    root: TigoObject
-    cloud_connects: list[TigoObject]
-    inverters: list[TigoObject]
-    strings: list[TigoObject]
-    panels: list[TigoObject]
-    raw_objects: list[TigoObject]
+class TigoObjectNode:
+    object_id: int
+    label: str | None
+    object_type_id: int
+    parent_id: int | None
+    datasource: str | None
+    children: list[int]
+    ui: TigoObjectUI | None
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoObjectType:
+    object_type_id: int
+    label: str
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoSourceSet:
+    set_name: str
+    last_min: datetime | None
+    last_day: datetime | None
+    last_raw: datetime | None = None
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoSource:
+    source_id: int
+    name: str | None
+    serial: str | None
+    gateway_count: int | None
+    control_state: str | None
+    last_checkin: datetime | None
+    timezone: str | None
+    sw_version: str | None
+    created_on: datetime | None
+    sets: list[TigoSourceSet]
+    system_id: int | None
+    object_id: int | None
+    panel_count: int | None
+    unit_type_id: int | None
+    is_discovery_complete: bool | None
+    raw: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
 class TigoSummary:
-    last_data: datetime | None
-    current_date: date | None
-    data_date: date | None
-    data_type: str | None
-    total_agg_energy_wh: float | None
-    total_agg_reclaimed_wh: float | None
+    lifetime_energy_dc: float | None
+    ytd_energy_dc: float | None
+    daily_energy_dc: float | None
+    last_power_dc: float | None
+    updated_on: datetime | None
     raw: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
-class TigoRangeCategory:
-    timestamp: datetime
-
-    @property
-    def hour(self) -> int:
-        return self.timestamp.hour
+class TigoCSVRow:
+    timestamp: datetime | None
+    values: dict[str, float | str | None]
 
 
 @dataclass(slots=True)
-class TigoRangeSeries:
-    series_id: str
-    name: str
-    values: list[float | int | None]
-    percentages: list[float | int | None]
-    unit: str | None
-    raw: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(slots=True)
-class TigoRangeData:
-    unit: str | None
-    categories: list[TigoRangeCategory]
-    series: list[TigoRangeSeries]
-    raw: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(slots=True)
-class TigoDateInfo:
-    date: date
-    sunrise: float | None
-    sunset: float | None
-    sunrise_time: str | None
-    sunset_time: str | None
-    light: float | None
-    dark: float | None
-    timezone: str | None
-    raw: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(slots=True)
-class TigoMinuteData:
-    last_data: datetime | None
-    data_date: datetime | None
-    data_type: str | None
-    sunrise: float | None
-    sunset: float | None
-    light: float | None
-    dark: float | None
-    dataset: list[Any]
-    raw: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(slots=True)
-class TigoAdvancedData:
+class TigoCSVTable:
     headers: list[str]
-    series: list[dict[str, Any]]
-    raw: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(slots=True)
-class TigoSystemView:
-    has_monitored_modules: bool
-    date: datetime | None
-    latest: datetime | None
-    channel: str | None
-    timeframe: int | None
-    timezone: str | None
-    has_basic: bool | None
-    first_day: datetime | None
-    last_day_with_data: datetime | None
-    config_url: str | None
-    range_data_url: str | None
-    month_data_url: str | None
-    date_info_url: str | None
-    minute_data_url: str | None
-    summary_url: str | None
-    agg_energy_url: str | None
-    advanced_data_url: str | None
-    urgent_url: str | None
-    background_update_url: str | None
-    raw: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(slots=True)
-class TigoAlertsMetadata:
-    system_id: int | None
-    detail_url: str | None
-    archive_url: str | None
-    no_alerts: bool
-    raw: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(slots=True)
-class TigoPanelDetail:
-    object_id: int
-    name: str
-    string_name: str | None
-    inverter_name: str | None
-    gateway_serial: str | None
-    optimizer_serial: str | None
-    radio_mac: str | None
-    optimizer_type_id: int | None
-    optimizer_model: str | None
-    rated_power_watts: float | None
-    layout_x: float | None
-    layout_y: float | None
-    angle: float | None
-    vendor_id: int | None
-    wireless_enabled: bool | None
-    hidden: bool | None
-    raw: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(slots=True)
-class TigoGatewayDetail:
-    object_id: int | None
-    name: str | None
-    serial: str | None
-    wifi_channels: list[str]
-    vendor_id: int | None
-    layout_x: float | None
-    layout_y: float | None
-    raw: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(slots=True)
-class TigoSystemInventory:
-    system_name: str
-    system_id: int | None
-    gateway: TigoGatewayDetail
-    panels: list[TigoPanelDetail]
-    inverters: list[TigoObject]
-    strings: list[TigoObject]
-    topology: TigoSystemTopology
-    optimizer_types: dict[int, dict[str, Any]]
-    raw: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(slots=True)
-class TigoStatusPage:
-    system_id: int | None
-    has_equipment_status: bool
-    tokens: list[str]
-    raw_html: str
-
-
-@dataclass(slots=True)
-class TigoAggEnergy:
-    system_id: int | None
-    data_date: date | None
-    data_type: str | None
-    dataset: list[Any]
-    last_data: datetime | None
-    raw: dict[str, Any] = field(default_factory=dict)
+    rows: list[TigoCSVRow]
+    raw_text: str

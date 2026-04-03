@@ -1,142 +1,210 @@
 from __future__ import annotations
 
-import requests
+from requests import Session
 
-from .models import TigoOverview, TigoSystemInfo, TigoSystemTopology
+from .models import TigoAuth, TigoCSVTable, TigoSummary, TigoSystem, TigoSystemLayout, TigoUser
 from .parsing import (
-    extract_csrf_token,
-    extract_default_system_id,
-    parse_advanced_data,
-    parse_agg_energy,
-    parse_alerts_page,
-    parse_calendar_optimized,
-    parse_daily_energy,
-    parse_date_info,
-    parse_info_page,
-    parse_minute_data,
-    parse_overview_page,
-    parse_range_data,
-    parse_status_page,
-    parse_summary,
-    parse_system_inventory,
-    parse_system_topology,
-    parse_system_view_page,
+    parse_csv_table,
+    parse_layout_response,
+    parse_login_response,
+    parse_object_types_response,
+    parse_objects_response,
+    parse_sources_response,
+    parse_summary_response,
+    parse_system_response,
+    parse_systems_response,
+    parse_user_response,
 )
 
 
 class TigoClient:
-    portal_url = "https://ei.tigoenergy.com/"
+    api_root = "https://api2.tigoenergy.com/api/v3"
 
     def __init__(
         self,
-        email: str,
+        username: str,
         password: str,
         *,
-        session: requests.Session | None = None,
+        session: Session | None = None,
         timeout: int = 30,
     ) -> None:
-        self.email = email
+        self.username = username
         self.password = password
         self.timeout = timeout
-        self.session = session or requests.Session()
-        self.default_system_id: int | None = None
+        self.session = session or Session()
+        self.auth: TigoAuth | None = None
 
-    def login(self) -> int:
-        login_page = self.session.get(self.portal_url, timeout=self.timeout)
-        login_page.raise_for_status()
-        csrf_token = extract_csrf_token(login_page.text)
-        response = self.session.post(
-            self.portal_url.rstrip("/") + "/site/login",
-            data={
-                "_csrf": csrf_token,
-                "LoginFormModel[login]": self.email,
-                "LoginFormModel[password]": self.password,
-                "LoginFormModel[remember_me]": "1",
-            },
-            allow_redirects=True,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        self.default_system_id = extract_default_system_id(response.url)
-        return self.default_system_id
+    def _headers(self) -> dict[str, str]:
+        if not self.auth:
+            raise ValueError("Not authenticated. Call login() first.")
+        return {"Authorization": f"Bearer {self.auth.auth_token}"}
 
-    def _require_system_id(self, system_id: int | None = None) -> int:
-        resolved = system_id or self.default_system_id
-        if resolved is None:
-            raise ValueError("No system_id provided and client is not logged in")
-        return resolved
-
-    def _get(self, path: str, *, system_id: int | None = None, extra_query: str = ""):
-        resolved = self._require_system_id(system_id)
-        separator = "&" if "?" in path else "?"
-        suffix = f"{separator}sysid={resolved}"
-        if extra_query:
-            suffix += f"&{extra_query.lstrip('&?')}"
-        response = self.session.get(f"https://ei.tigoenergy.com{path}{suffix}", timeout=self.timeout)
-        response.raise_for_status()
-        return response
-
-    def get_overview(self, system_id: int | None = None) -> TigoOverview:
-        resolved = self._require_system_id(system_id)
+    def login(self) -> TigoAuth:
         response = self.session.get(
-            f"https://ei.tigoenergy.com/fleet/system/overview/index?system_id={resolved}",
+            f"{self.api_root}/users/login",
+            auth=(self.username, self.password),
             timeout=self.timeout,
         )
         response.raise_for_status()
-        return parse_overview_page(response.text)
+        self.auth = parse_login_response(response.json())
+        return self.auth
 
-    def get_system_info(self, system_id: int | None = None) -> TigoSystemInfo:
-        return parse_info_page(self._get("/fleet/system/info/index", system_id=system_id).text)
+    def logout(self) -> dict:
+        response = self.session.get(
+            f"{self.api_root}/users/logout",
+            headers=self._headers(),
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        self.auth = None
+        return payload
 
-    def get_system_topology(self, system_id: int | None = None) -> TigoSystemTopology:
-        return parse_system_topology(self._get("/config/editor", system_id=system_id).json())
+    def get_current_user(self, user_id: int | None = None) -> TigoUser:
+        if user_id is None:
+            if not self.auth:
+                raise ValueError("user_id is required before login; after login it defaults to auth.user_id")
+            user_id = self.auth.user_id
+        response = self.session.get(
+            f"{self.api_root}/users/{user_id}",
+            headers=self._headers(),
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return parse_user_response(response.json())
 
-    def get_system_inventory(self, system_id: int | None = None):
-        inventory = parse_system_inventory(self._get("/config/editor", system_id=system_id).json())
-        inventory.system_id = self._require_system_id(system_id)
-        return inventory
+    def list_systems(self, *, page: int | None = None, limit: int | None = None, sort: str | None = None) -> list[TigoSystem]:
+        params: dict[str, int | str] = {}
+        if page is not None:
+            params["page"] = page
+        if limit is not None:
+            params["limit"] = limit
+        if sort is not None:
+            params["sort"] = sort
+        response = self.session.get(
+            f"{self.api_root}/systems",
+            headers=self._headers(),
+            params=params or None,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return parse_systems_response(response.json())
 
-    def get_daily_energy(self, system_id: int | None = None):
-        return parse_daily_energy(self._get("/data/daily-energy", system_id=system_id).json())
+    def get_system(self, system_id: int) -> TigoSystem:
+        response = self.session.get(
+            f"{self.api_root}/systems/view",
+            headers=self._headers(),
+            params={"id": system_id},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return parse_system_response(response.json())
 
-    def get_calendar_optimized(self, system_id: int | None = None):
-        return parse_calendar_optimized(self._get("/data/calendar-optimized", system_id=system_id).json())
+    def get_layout(self, system_id: int) -> TigoSystemLayout:
+        response = self.session.get(
+            f"{self.api_root}/systems/layout",
+            headers=self._headers(),
+            params={"id": system_id},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return parse_layout_response(response.json())
 
-    def get_summary(self, target_date: str | None = None, system_id: int | None = None):
-        extra = f"date={target_date}" if target_date else ""
-        return parse_summary(self._get("/data/summary", system_id=system_id, extra_query=extra).json())
+    def get_objects(self, system_id: int):
+        response = self.session.get(
+            f"{self.api_root}/objects/system",
+            headers=self._headers(),
+            params={"system_id": system_id},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return parse_objects_response(response.json())
 
-    def get_range_data(
+    def get_object_types(self):
+        response = self.session.get(
+            f"{self.api_root}/objects/types",
+            headers=self._headers(),
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return parse_object_types_response(response.json())
+
+    def get_sources(self, system_id: int):
+        response = self.session.get(
+            f"{self.api_root}/sources/system",
+            headers=self._headers(),
+            params={"system_id": system_id},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return parse_sources_response(response.json())
+
+    def get_summary(self, system_id: int) -> TigoSummary:
+        response = self.session.get(
+            f"{self.api_root}/data/summary",
+            headers=self._headers(),
+            params={"system_id": system_id},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return parse_summary_response(response.json())
+
+    def get_aggregate(
         self,
-        start_date: str | None = None,
-        end_date: str | None = None,
-        system_id: int | None = None,
-    ):
-        params: list[str] = []
-        if start_date:
-            params.append(f"startDate={start_date}")
-        if end_date:
-            params.append(f"endDate={end_date}")
-        return parse_range_data(self._get("/data/range-data", system_id=system_id, extra_query="&".join(params)).json())
+        system_id: int,
+        *,
+        start: str,
+        end: str,
+        level: str = "min",
+        param: str = "Pin",
+        object_ids: list[int] | None = None,
+        header: str | None = None,
+        sensors: bool | None = None,
+    ) -> TigoCSVTable:
+        params: dict[str, str] = {
+            "system_id": str(system_id),
+            "start": start,
+            "end": end,
+            "level": level,
+            "param": param,
+        }
+        if object_ids:
+            params["object_ids"] = ",".join(str(i) for i in object_ids)
+        if header:
+            params["header"] = header
+        if sensors is not None:
+            params["sensors"] = "true" if sensors else "false"
+        response = self.session.get(
+            f"{self.api_root}/data/aggregate",
+            headers=self._headers(),
+            params=params,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return parse_csv_table(response.text)
 
-    def get_date_info(self, target_date: str, system_id: int | None = None):
-        return parse_date_info(self._get("/data/date-info", system_id=system_id, extra_query=f"date={target_date}").json())
-
-    def get_minute_data(self, target_date: str, minute: str, system_id: int | None = None):
-        extra = f"date={target_date}&minute={minute}"
-        return parse_minute_data(self._get("/data/minute-data", system_id=system_id, extra_query=extra).json())
-
-    def get_advanced_data(self, target_date: str, system_id: int | None = None):
-        return parse_advanced_data(self._get("/data/advanced", system_id=system_id, extra_query=f"date={target_date}").json())
-
-    def get_agg_energy(self, target_date: str, system_id: int | None = None):
-        return parse_agg_energy(self._get("/data/agg-energy", system_id=system_id, extra_query=f"date={target_date}").json())
-
-    def get_system_view(self, system_id: int | None = None):
-        return parse_system_view_page(self._get("/fleet/system/view/index", system_id=system_id).text)
-
-    def get_status(self, system_id: int | None = None):
-        return parse_status_page(self._get("/fleet/system/status/index", system_id=system_id).text)
-
-    def get_alerts_metadata(self, system_id: int | None = None):
-        return parse_alerts_page(self._get("/fleet/system/alerts/index", system_id=system_id).text)
+    def get_combined(
+        self,
+        system_id: int,
+        *,
+        start: str,
+        end: str,
+        agg: str,
+        object_ids: list[int] | None = None,
+    ) -> TigoCSVTable:
+        params: dict[str, str] = {
+            "system_id": str(system_id),
+            "start": start,
+            "end": end,
+            "agg": agg,
+        }
+        if object_ids:
+            params["object_ids"] = ",".join(str(i) for i in object_ids)
+        response = self.session.get(
+            f"{self.api_root}/data/combined",
+            headers=self._headers(),
+            params=params,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return parse_csv_table(response.text)

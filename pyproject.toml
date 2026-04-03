@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pytigo"
-version = "0.2.0"
-description = "Python client for Tigo EI portal system, panel, and production data"
+version = "0.3.0"
+description = "Python client for the documented Tigo REST API v3"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [
   { name = "Blind Badger Studios" },
 ]
-keywords = ["tigo", "solar", "energy", "monitoring", "photovoltaic", "pv"]
+keywords = ["tigo", "solar", "energy", "monitoring", "photovoltaic", "pv", "api"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
