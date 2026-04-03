@@ -194,3 +194,67 @@ class TigoAlertsMetadata:
     archive_url: str | None
     no_alerts: bool
     raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoPanelDetail:
+    object_id: int
+    name: str
+    string_name: str | None
+    inverter_name: str | None
+    gateway_serial: str | None
+    optimizer_serial: str | None
+    radio_mac: str | None
+    optimizer_type_id: int | None
+    optimizer_model: str | None
+    rated_power_watts: float | None
+    layout_x: float | None
+    layout_y: float | None
+    angle: float | None
+    vendor_id: int | None
+    wireless_enabled: bool | None
+    hidden: bool | None
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoGatewayDetail:
+    object_id: int | None
+    name: str | None
+    serial: str | None
+    wifi_channels: list[str]
+    vendor_id: int | None
+    layout_x: float | None
+    layout_y: float | None
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoSystemInventory:
+    system_name: str
+    system_id: int | None
+    gateway: TigoGatewayDetail
+    panels: list[TigoPanelDetail]
+    inverters: list[TigoObject]
+    strings: list[TigoObject]
+    topology: TigoSystemTopology
+    optimizer_types: dict[int, dict[str, Any]]
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoStatusPage:
+    system_id: int | None
+    has_equipment_status: bool
+    tokens: list[str]
+    raw_html: str
+
+
+@dataclass(slots=True)
+class TigoAggEnergy:
+    system_id: int | None
+    data_date: date | None
+    data_type: str | None
+    dataset: list[Any]
+    last_data: datetime | None
+    raw: dict[str, Any] = field(default_factory=dict)

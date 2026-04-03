@@ -14,6 +14,8 @@ from pytigo.parsing import (
     parse_system_topology,
 )
 
+TEST_SYSTEM_ID = 424242
+
 LOGIN_HTML = '''
 <html><body>
 <form>
@@ -22,29 +24,29 @@ LOGIN_HTML = '''
 </body></html>
 '''
 
-OVERVIEW_HTML = r'''
-<html><head><title>131225 - Overview</title></head><body>
+OVERVIEW_HTML = rf'''
+<html><head><title>{TEST_SYSTEM_ID} - Overview</title></head><body>
 <script>
-var GLOBALTIGONOCONFLICT = {"systemId":131225,"nodeAggregateUrl":"https:\/\/ei.tigoenergy.com\/api\/v4\/data\/aggregate","nodeSystemViewUrl":"\/api\/v4\/systems\/view\/131225","dataLifetimeUrl":"\/api\/v4\/fleet\/system\/overview\/data-lifetime","weatherUrl":"\/fleet\/system\/overview\/data-weather?sysid=131225","basicChartsUrl":"\/system\/charts?sysid=131225","mapOptions":{"center":["47.74632339999999","-117.4407446"]},"chart":{"baseUrl":"\/api\/v4\/data\/aggregate","oldUrl":"\/system\/overview\/e-chart-handler","system_id":131225,"agg":"hour","view":"gen","startDate":"2026-04-02","endDate":"2026-04-02","firstDate":"2024-08-29","lastDate":"2026-04-02","hasPremium":true,"hasReclaimed":true,"hasBasic":false},"tabOptions":["solar"],"calendar":{"numRestrictedWeeks":0,"numRestrictedMonths":0,"numRestrictedYears":0,"url":"\/data\/daily-energy?sysid=131225","timezone":"America\/Los_Angeles","startDate":"2024-08-29","endDate":"2026-03-31"},"settingsUrl":"\/fleet\/system\/settings\/general?sysid=131225","NODE_URI":"\/api\/v4"};
+var GLOBALTIGONOCONFLICT = {{"systemId":{TEST_SYSTEM_ID},"nodeAggregateUrl":"https:\/\/ei.tigoenergy.com\/api\/v4\/data\/aggregate","nodeSystemViewUrl":"\/api\/v4\/systems\/view\/{TEST_SYSTEM_ID}","dataLifetimeUrl":"\/api\/v4\/fleet\/system\/overview\/data-lifetime","weatherUrl":"\/fleet\/system\/overview\/data-weather?sysid={TEST_SYSTEM_ID}","basicChartsUrl":"\/system\/charts?sysid={TEST_SYSTEM_ID}","mapOptions":{{"center":["35.0000","-100.0000"]}},"chart":{{"baseUrl":"\/api\/v4\/data\/aggregate","oldUrl":"\/system\/overview\/e-chart-handler","system_id":{TEST_SYSTEM_ID},"agg":"hour","view":"gen","startDate":"2026-04-02","endDate":"2026-04-02","firstDate":"2024-08-29","lastDate":"2026-04-02","hasPremium":true,"hasReclaimed":true,"hasBasic":false}},"tabOptions":["solar"],"calendar":{{"numRestrictedWeeks":0,"numRestrictedMonths":0,"numRestrictedYears":0,"url":"\/data\/daily-energy?sysid={TEST_SYSTEM_ID}","timezone":"America\/Chicago","startDate":"2024-08-29","endDate":"2026-03-31"}},"settingsUrl":"\/fleet\/system\/settings\/general?sysid={TEST_SYSTEM_ID}","NODE_URI":"\/api\/v4"}};
 </script>
 </body></html>
 '''
 
-INFO_HTML = '''
+INFO_HTML = f'''
 <html><body>
 System
 System Name
 Example Solar Home
 ID
-131225
+{TEST_SYSTEM_ID}
 Install Date
 2024-09-24
 Peak Power
 21.93 kW
 Location
 123 Example Rd
-Spokane
-WA 99208
+Exampletown
+TX 75000
 Cloud Connect Advanced
 Name
 Serial
@@ -61,12 +63,12 @@ Max Power
 -
 Inverter A
 15k Limitless
-Sol-Ark
+Example Manufacturer
 15 kW
 -
 Inverter B
 15k Limitless
-Sol-Ark
+Example Manufacturer
 15 kW
 Modules
 Model
@@ -74,7 +76,7 @@ Manufacturer
 Max Power
 Count
 SIL 430
-Silfab
+Example Solar
 430 W
 51
 </body></html>
@@ -126,9 +128,9 @@ RANGE_JSON = {
         "date_range": "04/02/2026",
         "chart_title": "04/02/2026",
         "x_title": "04/02/2026 (Hours)",
-        "has_premium": {"131225": True},
-        "has_basic": {"131225": False},
-        "last_data_timestamp": {"131225": "2026-03-31 18:58:00"},
+        "has_premium": {str(TEST_SYSTEM_ID): True},
+        "has_basic": {str(TEST_SYSTEM_ID): False},
+        "last_data_timestamp": {str(TEST_SYSTEM_ID): "2026-03-31 18:58:00"},
         "is_premium_restricted": False,
     },
     "c": ["2026-04-02T00:00:00", "2026-04-02T01:00:00"],
@@ -139,22 +141,22 @@ RANGE_JSON = {
 
 def test_extract_login_artifacts():
     assert extract_csrf_token(LOGIN_HTML) == "csrf-token-123"
-    assert extract_default_system_id("https://ei.tigoenergy.com/fleet/system/overview/index?system_id=131225") == 131225
+    assert extract_default_system_id(f"https://ei.tigoenergy.com/fleet/system/overview/index?system_id={TEST_SYSTEM_ID}") == TEST_SYSTEM_ID
 
 
 def test_parse_overview_page():
     overview = parse_overview_page(OVERVIEW_HTML)
-    assert overview.system_id == 131225
-    assert overview.calendar_url == "/data/daily-energy?sysid=131225"
+    assert overview.system_id == TEST_SYSTEM_ID
+    assert overview.calendar_url == f"/data/daily-energy?sysid={TEST_SYSTEM_ID}"
     assert overview.chart_view == "gen"
-    assert overview.timezone == "America/Los_Angeles"
+    assert overview.timezone == "America/Chicago"
 
 
 def test_parse_info_page():
     info = parse_info_page(INFO_HTML)
     assert info.system_name == "Example Solar Home"
-    assert info.system_id == 131225
-    assert info.location == ["123 Example Rd", "Spokane", "WA 99208"]
+    assert info.system_id == TEST_SYSTEM_ID
+    assert info.location == ["123 Example Rd", "Exampletown", "TX 75000"]
     assert info.cloud_connect.name == "Example CCA"
     assert info.cloud_connect.serial == "SERIAL123"
     assert len(info.inverters) == 2
@@ -229,7 +231,7 @@ class FakeSession:
     def post(self, url, data=None, **kwargs):
         self.calls.append(("POST", url, {"data": data, **kwargs}))
         if "site/login" in url:
-            return FakeResponse(text="", url="https://ei.tigoenergy.com/fleet/system/overview/index?system_id=131225")
+            return FakeResponse(text="", url=f"https://ei.tigoenergy.com/fleet/system/overview/index?system_id={TEST_SYSTEM_ID}")
         raise AssertionError(f"Unexpected POST {url}")
 
 
@@ -237,9 +239,9 @@ def test_client_login_and_fetch_methods():
     client = TigoClient(email="user@example.com", password="secret", session=FakeSession())
     system_id = client.login()
 
-    assert system_id == 131225
-    assert client.default_system_id == 131225
-    assert client.get_overview().system_id == 131225
+    assert system_id == TEST_SYSTEM_ID
+    assert client.default_system_id == TEST_SYSTEM_ID
+    assert client.get_overview().system_id == TEST_SYSTEM_ID
     assert client.get_system_info().system_name == "Example Solar Home"
     assert client.get_system_topology().panels[1].name == "A2"
     assert client.get_daily_energy()[2].energy_wh == 30546.05

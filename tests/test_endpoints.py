@@ -10,6 +10,8 @@ from pytigo.parsing import (
     parse_system_view_page,
 )
 
+TEST_SYSTEM_ID = 424242
+
 DATE_INFO_JSON = {
     "2026-03-31": {
         "sunrise": 23.45,
@@ -18,7 +20,7 @@ DATE_INFO_JSON = {
         "sunset_time": "12:19",
         "light": 21.683333333333334,
         "dark": 14.1,
-        "timezone": "America/Los_Angeles",
+        "timezone": "America/Chicago",
     }
 }
 
@@ -41,30 +43,30 @@ ADVANCED_JSON = {
     ]
 }
 
-VIEW_HTML = r'''
+VIEW_HTML = rf'''
 <html><body>
 <script>
-var arrayConfig = {"hasMonitoredModules":true,"date":"2026-03-31 19:21:33","latest":"2026-03-31 19:21:33","minutes":null,"channel":"energy","timeframe":1,"timezone":"America\/Los_Angeles","display":1,"sun_direction":-1,"has_basic":false,"first_day":"2024-08-29 14:45:43.169598","last_day_with_data":"2026-03-31 18:58:00"};
-    var config_url  = "\/config\/array?sysid=131225";
-    var rangedata_url    = "\/data\/range-data?sysid=131225";
-    var monthdata_url    = "\/data\/calendar-optimized?sysid=131225";
-    var dateinfo_url = "\/data\/date-info?sysid=131225";
-    var minutedata_url   = "\/data\/minute-data?sysid=131225";
-    var datedata_url = "\/data\/summary?sysid=131225";
-    var aggEnergyUrl = "\/data\/agg-energy?sysid=131225";
-    var chartdownload_url = "\/data\/advanced?sysid=131225";
-    var urgent_url  = "\/data\/urgent?sysid=131225";
-    var background_update_url = "/system/summary/background?sysid=131225";
-var GLOBALTIGONOCONFLICT = {"is_mobile":false,"data_api":"\/api\/v4"};
+var arrayConfig = {{"hasMonitoredModules":true,"date":"2026-03-31 19:21:33","latest":"2026-03-31 19:21:33","minutes":null,"channel":"energy","timeframe":1,"timezone":"America\/Chicago","display":1,"sun_direction":-1,"has_basic":false,"first_day":"2024-08-29 14:45:43.169598","last_day_with_data":"2026-03-31 18:58:00"}};
+    var config_url  = "\/config\/array?sysid={TEST_SYSTEM_ID}";
+    var rangedata_url    = "\/data\/range-data?sysid={TEST_SYSTEM_ID}";
+    var monthdata_url    = "\/data\/calendar-optimized?sysid={TEST_SYSTEM_ID}";
+    var dateinfo_url = "\/data\/date-info?sysid={TEST_SYSTEM_ID}";
+    var minutedata_url   = "\/data\/minute-data?sysid={TEST_SYSTEM_ID}";
+    var datedata_url = "\/data\/summary?sysid={TEST_SYSTEM_ID}";
+    var aggEnergyUrl = "\/data\/agg-energy?sysid={TEST_SYSTEM_ID}";
+    var chartdownload_url = "\/data\/advanced?sysid={TEST_SYSTEM_ID}";
+    var urgent_url  = "\/data\/urgent?sysid={TEST_SYSTEM_ID}";
+    var background_update_url = "/system/summary/background?sysid={TEST_SYSTEM_ID}";
+var GLOBALTIGONOCONFLICT = {{"is_mobile":false,"data_api":"\/api\/v4"}};
 </script>
 </body></html>
 '''
 
-ALERTS_HTML = r'''
+ALERTS_HTML = rf'''
 <html><body>
 <script>
-var csrf_param  = "_csrf";var csrf_token="token-123";var sysid  = "131225";
-var ALERTSNOCONFLICT = {"detail_url":"\/system\/alerts\/detail?sysid=131225","archive_url":"\/system\/alerts\/archive"};
+var csrf_param  = "_csrf";var csrf_token="token-123";var sysid  = "{TEST_SYSTEM_ID}";
+var ALERTSNOCONFLICT = {{"detail_url":"\/system\/alerts\/detail?sysid={TEST_SYSTEM_ID}","archive_url":"\/system\/alerts\/archive"}};
 var TIGO_ALERTS = [];
 </script>
 Alerts
@@ -115,14 +117,14 @@ class FakeSession:
     def post(self, url, data=None, **kwargs):
         self.calls.append(("POST", url, {"data": data, **kwargs}))
         if "site/login" in url:
-            return FakeResponse(text="", url="https://ei.tigoenergy.com/fleet/system/overview/index?system_id=131225")
+            return FakeResponse(text="", url=f"https://ei.tigoenergy.com/fleet/system/overview/index?system_id={TEST_SYSTEM_ID}")
         raise AssertionError(f"Unexpected POST {url}")
 
 
 def test_parse_date_info():
     parsed = parse_date_info(DATE_INFO_JSON)
     assert parsed.date == date(2026, 3, 31)
-    assert parsed.timezone == "America/Los_Angeles"
+    assert parsed.timezone == "America/Chicago"
     assert parsed.sunrise_time == "23:27"
 
 
@@ -140,15 +142,15 @@ def test_parse_advanced_data():
 
 def test_parse_system_view_page():
     parsed = parse_system_view_page(VIEW_HTML)
-    assert parsed.timezone == "America/Los_Angeles"
-    assert parsed.date_info_url == "/data/date-info?sysid=131225"
-    assert parsed.advanced_data_url == "/data/advanced?sysid=131225"
+    assert parsed.timezone == "America/Chicago"
+    assert parsed.date_info_url == f"/data/date-info?sysid={TEST_SYSTEM_ID}"
+    assert parsed.advanced_data_url == f"/data/advanced?sysid={TEST_SYSTEM_ID}"
 
 
 def test_parse_alerts_page():
     parsed = parse_alerts_page(ALERTS_HTML)
-    assert parsed.system_id == 131225
-    assert parsed.detail_url == "/system/alerts/detail?sysid=131225"
+    assert parsed.system_id == TEST_SYSTEM_ID
+    assert parsed.detail_url == f"/system/alerts/detail?sysid={TEST_SYSTEM_ID}"
     assert parsed.no_alerts is True
 
 
@@ -156,7 +158,7 @@ def test_client_endpoint_helpers():
     client = TigoClient(email="user@example.com", password="secret", session=FakeSession())
     client.login()
 
-    assert client.get_date_info("2026-03-31").timezone == "America/Los_Angeles"
+    assert client.get_date_info("2026-03-31").timezone == "America/Chicago"
     assert client.get_minute_data("2026-03-31", minute="12:00").data_type == "pin"
     assert client.get_advanced_data("2026-03-31").headers[0] == "A1_Pin"
     assert client.get_system_view().channel == "energy"

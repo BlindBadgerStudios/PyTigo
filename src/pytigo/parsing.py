@@ -10,19 +10,24 @@ from urllib.parse import parse_qs, urlparse
 from .models import (
     DailyEnergyPoint,
     TigoAdvancedData,
+    TigoAggEnergy,
     TigoAlertsMetadata,
     TigoCloudConnect,
     TigoDateInfo,
+    TigoGatewayDetail,
     TigoInverter,
     TigoMinuteData,
     TigoModuleSummary,
     TigoObject,
     TigoOverview,
+    TigoPanelDetail,
     TigoRangeCategory,
     TigoRangeData,
     TigoRangeSeries,
+    TigoStatusPage,
     TigoSummary,
     TigoSystemInfo,
+    TigoSystemInventory,
     TigoSystemTopology,
     TigoSystemView,
 )
@@ -209,11 +214,76 @@ def parse_system_topology(payload: dict) -> TigoSystemTopology:
     )
 
 
+def parse_system_inventory(payload: dict) -> TigoSystemInventory:
+    topology = parse_system_topology(payload)
+    system = payload["system"]
+    optimizer_types = {int(key): value for key, value in system.get("optimizer_types", {}).items()}
+    wifi_channels = list(system.get("wifi_channels", []))
+
+    objects_by_id = {obj.object_id: obj for obj in topology.raw_objects}
+    first_gateway = topology.cloud_connects[0] if topology.cloud_connects else None
+    gateway = TigoGatewayDetail(
+        object_id=first_gateway.object_id if first_gateway else None,
+        name=first_gateway.name if first_gateway else None,
+        serial=first_gateway.serial if first_gateway else None,
+        wifi_channels=wifi_channels,
+        vendor_id=first_gateway.vendor_id if first_gateway else None,
+        layout_x=first_gateway.x if first_gateway else None,
+        layout_y=first_gateway.y if first_gateway else None,
+        raw=first_gateway.raw if first_gateway else {},
+    )
+
+    panels: list[TigoPanelDetail] = []
+    for panel in topology.panels:
+        string_obj = objects_by_id.get(panel.parent_id) if panel.parent_id else None
+        inverter_obj = objects_by_id.get(string_obj.parent_id) if string_obj and string_obj.parent_id else None
+        raw = panel.raw
+        optimizer_type_id = raw.get("S")
+        optimizer_meta = optimizer_types.get(int(optimizer_type_id)) if optimizer_type_id is not None and str(optimizer_type_id).isdigit() else None
+        panels.append(
+            TigoPanelDetail(
+                object_id=panel.object_id,
+                name=panel.name,
+                string_name=string_obj.name if string_obj else None,
+                inverter_name=inverter_obj.name if inverter_obj else None,
+                gateway_serial=raw.get("N") or gateway.serial,
+                optimizer_serial=panel.serial,
+                radio_mac=panel.mac,
+                optimizer_type_id=int(optimizer_type_id) if optimizer_type_id is not None else None,
+                optimizer_model=optimizer_meta.get("model") if optimizer_meta else None,
+                rated_power_watts=panel.max_power_watts,
+                layout_x=panel.x,
+                layout_y=panel.y,
+                angle=panel.angle,
+                vendor_id=panel.vendor_id,
+                wireless_enabled=bool(raw.get("X")) if raw.get("X") is not None else None,
+                hidden=bool(raw.get("Z")) if raw.get("Z") is not None else None,
+                raw=raw,
+            )
+        )
+
+    return TigoSystemInventory(
+        system_name=topology.root.name,
+        system_id=None,
+        gateway=gateway,
+        panels=panels,
+        inverters=topology.inverters,
+        strings=topology.strings,
+        topology=topology,
+        optimizer_types=optimizer_types,
+        raw=payload,
+    )
+
+
 def parse_daily_energy(payload: dict[str, float | int]) -> list[DailyEnergyPoint]:
     return [
         DailyEnergyPoint(date=date.fromisoformat(day), energy_wh=float(value))
         for day, value in sorted(payload.items())
     ]
+
+
+def parse_calendar_optimized(payload: list[list[str | float | int]]) -> list[DailyEnergyPoint]:
+    return [DailyEnergyPoint(date=date.fromisoformat(day), energy_wh=float(value)) for day, value in payload]
 
 
 def parse_summary(payload: dict) -> TigoSummary:
@@ -281,6 +351,17 @@ def parse_advanced_data(payload: dict) -> TigoAdvancedData:
     return TigoAdvancedData(headers=headers, series=series, raw=payload)
 
 
+def parse_agg_energy(payload: dict) -> TigoAggEnergy:
+    return TigoAggEnergy(
+        system_id=payload.get("system_id"),
+        data_date=date.fromisoformat(payload["dataDate"]) if payload.get("dataDate") else None,
+        data_type=payload.get("dataType"),
+        dataset=list(payload.get("dataset", [])),
+        last_data=_parse_optional_datetime(payload.get("lastData"), "%Y-%m-%d %H:%M:%S"),
+        raw=payload,
+    )
+
+
 def parse_system_view_page(html: str) -> TigoSystemView:
     config = _extract_js_object(html, "arrayConfig")
     return TigoSystemView(
@@ -304,6 +385,18 @@ def parse_system_view_page(html: str) -> TigoSystemView:
         urgent_url=_extract_js_string(html, "urgent_url"),
         background_update_url=_extract_js_string(html, "background_update_url"),
         raw=config,
+    )
+
+
+def parse_status_page(html: str) -> TigoStatusPage:
+    tokens = _tokens(html)
+    match = re.search(r'"systemId":(\d+)', html)
+    system_id = int(match.group(1)) if match else None
+    return TigoStatusPage(
+        system_id=system_id,
+        has_equipment_status=("Equipment Status" in tokens),
+        tokens=tokens,
+        raw_html=html,
     )
 
 

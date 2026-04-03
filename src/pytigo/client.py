@@ -7,14 +7,18 @@ from .parsing import (
     extract_csrf_token,
     extract_default_system_id,
     parse_advanced_data,
+    parse_agg_energy,
     parse_alerts_page,
+    parse_calendar_optimized,
     parse_daily_energy,
     parse_date_info,
     parse_info_page,
     parse_minute_data,
     parse_overview_page,
     parse_range_data,
+    parse_status_page,
     parse_summary,
+    parse_system_inventory,
     parse_system_topology,
     parse_system_view_page,
 )
@@ -87,8 +91,16 @@ class TigoClient:
     def get_system_topology(self, system_id: int | None = None) -> TigoSystemTopology:
         return parse_system_topology(self._get("/config/editor", system_id=system_id).json())
 
+    def get_system_inventory(self, system_id: int | None = None):
+        inventory = parse_system_inventory(self._get("/config/editor", system_id=system_id).json())
+        inventory.system_id = self._require_system_id(system_id)
+        return inventory
+
     def get_daily_energy(self, system_id: int | None = None):
         return parse_daily_energy(self._get("/data/daily-energy", system_id=system_id).json())
+
+    def get_calendar_optimized(self, system_id: int | None = None):
+        return parse_calendar_optimized(self._get("/data/calendar-optimized", system_id=system_id).json())
 
     def get_summary(self, target_date: str | None = None, system_id: int | None = None):
         extra = f"date={target_date}" if target_date else ""
@@ -117,8 +129,14 @@ class TigoClient:
     def get_advanced_data(self, target_date: str, system_id: int | None = None):
         return parse_advanced_data(self._get("/data/advanced", system_id=system_id, extra_query=f"date={target_date}").json())
 
+    def get_agg_energy(self, target_date: str, system_id: int | None = None):
+        return parse_agg_energy(self._get("/data/agg-energy", system_id=system_id, extra_query=f"date={target_date}").json())
+
     def get_system_view(self, system_id: int | None = None):
         return parse_system_view_page(self._get("/fleet/system/view/index", system_id=system_id).text)
+
+    def get_status(self, system_id: int | None = None):
+        return parse_status_page(self._get("/fleet/system/status/index", system_id=system_id).text)
 
     def get_alerts_metadata(self, system_id: int | None = None):
         return parse_alerts_page(self._get("/fleet/system/alerts/index", system_id=system_id).text)
