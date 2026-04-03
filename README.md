@@ -20,6 +20,8 @@ Supported official API areas:
 - data/summary
 - data/aggregate
 - data/combined
+- alerts/system
+- alerts/types
 
 ## Install
 
@@ -55,6 +57,8 @@ combined = client.get_combined(
     end="2026-03-31T23:59:59",
     agg="day",
 )
+alerts = client.get_alerts(system.system_id, limit=10)
+alert_types = client.get_alert_types()
 
 print(auth.user_id)
 print(system.name)
@@ -64,6 +68,8 @@ print(sources[0].serial if sources else None)
 print(summary.daily_energy_dc)
 print(aggregate.rows[0].values)
 print(combined.rows[0].values)
+print(alerts[0].title if alerts else None)
+print(alert_types[0].title if alert_types else None)
 ```
 
 ## Notes

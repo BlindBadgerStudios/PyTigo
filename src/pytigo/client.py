@@ -2,8 +2,19 @@ from __future__ import annotations
 
 from requests import Session
 
-from .models import TigoAuth, TigoCSVTable, TigoSummary, TigoSystem, TigoSystemLayout, TigoUser
+from .models import (
+    TigoAlert,
+    TigoAlertType,
+    TigoAuth,
+    TigoCSVTable,
+    TigoSummary,
+    TigoSystem,
+    TigoSystemLayout,
+    TigoUser,
+)
 from .parsing import (
+    parse_alert_types_response,
+    parse_alerts_response,
     parse_csv_table,
     parse_layout_response,
     parse_login_response,
@@ -90,11 +101,14 @@ class TigoClient:
         response.raise_for_status()
         return parse_systems_response(response.json())
 
-    def get_system(self, system_id: int) -> TigoSystem:
+    def get_system(self, system_id: int, *, include: list[str] | None = None) -> TigoSystem:
+        params: dict[str, str | int] = {"id": system_id}
+        if include:
+            params["include"] = ",".join(include)
         response = self.session.get(
             f"{self.api_root}/systems/view",
             headers=self._headers(),
-            params={"id": system_id},
+            params=params,
             timeout=self.timeout,
         )
         response.raise_for_status()
@@ -208,3 +222,46 @@ class TigoClient:
         )
         response.raise_for_status()
         return parse_csv_table(response.text)
+
+    def get_alerts(
+        self,
+        system_id: int,
+        *,
+        language: str | None = None,
+        start_added: str | None = None,
+        end_added: str | None = None,
+        page: int | None = None,
+        limit: int | None = None,
+    ) -> list[TigoAlert]:
+        params: dict[str, str | int] = {"system_id": system_id}
+        if language:
+            params["language"] = language
+        if start_added:
+            params["start_added"] = start_added
+        if end_added:
+            params["end_added"] = end_added
+        if page is not None:
+            params["page"] = page
+        if limit is not None:
+            params["limit"] = limit
+        response = self.session.get(
+            f"{self.api_root}/alerts/system",
+            headers=self._headers(),
+            params=params,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return parse_alerts_response(response.json())
+
+    def get_alert_types(self, *, language: str | None = None) -> list[TigoAlertType]:
+        params: dict[str, str] = {}
+        if language:
+            params["language"] = language
+        response = self.session.get(
+            f"{self.api_root}/alerts/types",
+            headers=self._headers(),
+            params=params or None,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return parse_alert_types_response(response.json())

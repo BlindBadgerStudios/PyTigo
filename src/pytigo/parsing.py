@@ -6,6 +6,8 @@ from datetime import date, datetime
 from typing import Any
 
 from .models import (
+    TigoAlert,
+    TigoAlertType,
     TigoAuth,
     TigoCSVRow,
     TigoCSVTable,
@@ -31,7 +33,7 @@ def _parse_datetime(value: str | None) -> datetime | None:
     try:
         return datetime.fromisoformat(value)
     except ValueError:
-        for fmt in ("%Y/%m/%d %H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+        for fmt in ("%Y/%m/%d %H:%M:%S.%f", "%Y/%m/%d %H:%M:%S", "%Y-%m-%d %H:%M:%S"):
             try:
                 return datetime.strptime(value, fmt)
             except ValueError:
@@ -274,6 +276,36 @@ def parse_summary_response(payload: dict[str, Any]) -> TigoSummary:
         updated_on=_parse_datetime(summary.get("updated_on")),
         raw=payload,
     )
+
+
+def parse_alerts_response(payload: dict[str, Any]) -> list[TigoAlert]:
+    return [
+        TigoAlert(
+            alert_id=int(item["alert_id"]),
+            added=_parse_datetime(item.get("added")),
+            generated=_parse_datetime(item.get("generated")),
+            system_id=_to_int(item.get("system_id")),
+            unique_id=_to_int(item.get("unique_id")),
+            title=item.get("title"),
+            message=item.get("message"),
+            description=item.get("description"),
+            raw=item,
+        )
+        for item in payload.get("alerts", [])
+    ]
+
+
+def parse_alert_types_response(payload: dict[str, Any]) -> list[TigoAlertType]:
+    return [
+        TigoAlertType(
+            alert_type_id=int(item["alert_type_id"]),
+            title=item.get("title"),
+            description=item.get("description"),
+            unique_id=_to_int(item.get("unique_id")),
+            raw=item,
+        )
+        for item in payload.get("alert_types", [])
+    ]
 
 
 def parse_csv_table(text: str) -> TigoCSVTable:

@@ -186,6 +186,28 @@ class TigoSummary:
 
 
 @dataclass(slots=True)
+class TigoAlert:
+    alert_id: int
+    added: datetime | None
+    generated: datetime | None
+    system_id: int | None
+    unique_id: int | None
+    title: str | None
+    message: str | None
+    description: str | None
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TigoAlertType:
+    alert_type_id: int
+    title: str | None
+    description: str | None
+    unique_id: int | None
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class TigoCSVRow:
     timestamp: datetime | None
     values: dict[str, float | str | None]

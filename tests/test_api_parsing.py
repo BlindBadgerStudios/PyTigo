@@ -1,6 +1,8 @@
 from datetime import date, datetime
 
 from pytigo.parsing import (
+    parse_alert_types_response,
+    parse_alerts_response,
     parse_csv_table,
     parse_layout_response,
     parse_login_response,
@@ -185,6 +187,32 @@ SUMMARY_JSON = {
     }
 }
 
+ALERTS_JSON = {
+    "alerts": [
+        {
+            "alert_id": 1,
+            "added": "2018-08-01T09:09:05-07:00",
+            "generated": "2018-08-01T09:08:20-07:00",
+            "system_id": 424242,
+            "unique_id": 106,
+            "title": "Tigo Alert: String Shutdown",
+            "message": "String A offline",
+            "description": "Detailed description",
+        }
+    ]
+}
+
+ALERT_TYPES_JSON = {
+    "alert_types": [
+        {
+            "alert_type_id": 24,
+            "description": "Low power production description",
+            "title": "Low Power Production on PV Module",
+            "unique_id": 300,
+        }
+    ]
+}
+
 CSV_TEXT = "Datetime,1,2\n2026/03/31 00:00:00,2078.8,2069.77\n2026/03/31 00:01:00,,2060\n"
 
 
@@ -228,6 +256,12 @@ def test_parse_layout_objects_sources_summary_and_csv():
 
     summary = parse_summary_response(SUMMARY_JSON)
     assert summary.daily_energy_dc == 105885.47
+
+    alerts = parse_alerts_response(ALERTS_JSON)
+    assert alerts[0].title == "Tigo Alert: String Shutdown"
+
+    alert_types = parse_alert_types_response(ALERT_TYPES_JSON)
+    assert alert_types[0].unique_id == 300
 
     csv_table = parse_csv_table(CSV_TEXT)
     assert csv_table.headers == ["Datetime", "1", "2"]
