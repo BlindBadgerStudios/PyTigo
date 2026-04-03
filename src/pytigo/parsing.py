@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 from datetime import date, datetime
 from typing import Any
 
@@ -16,6 +17,7 @@ from .models import (
     TigoObjectNode,
     TigoObjectType,
     TigoObjectUI,
+    TigoPage,
     TigoPanelLayout,
     TigoSource,
     TigoSourceSet,
@@ -25,6 +27,8 @@ from .models import (
     TigoSystemLayout,
     TigoUser,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -38,6 +42,7 @@ def _parse_datetime(value: str | None) -> datetime | None:
                 return datetime.strptime(value, fmt)
             except ValueError:
                 continue
+    logger.warning("Could not parse datetime value: %r", value)
     return None
 
 
@@ -121,8 +126,23 @@ def _parse_system(data: dict[str, Any]) -> TigoSystem:
     )
 
 
-def parse_systems_response(payload: dict[str, Any]) -> list[TigoSystem]:
-    return [_parse_system(system) for system in payload.get("systems", [])]
+def _extract_page_meta(payload: dict[str, Any]) -> tuple[int | None, int | None, int | None, dict[str, str]]:
+    meta = payload.get("_meta") or {}
+    links_raw = payload.get("_links") or {}
+    links = {k: v for k, v in links_raw.items() if isinstance(v, str)}
+    return _to_int(meta.get("total")), _to_int(meta.get("page")), _to_int(meta.get("limit")), links
+
+
+def parse_systems_response(payload: dict[str, Any]) -> TigoPage[TigoSystem]:
+    total, page, limit, links = _extract_page_meta(payload)
+    return TigoPage(
+        items=[_parse_system(system) for system in payload.get("systems", [])],
+        total=total,
+        page=page,
+        limit=limit,
+        links=links,
+        raw=payload,
+    )
 
 
 def parse_system_response(payload: dict[str, Any]) -> TigoSystem:
@@ -278,8 +298,9 @@ def parse_summary_response(payload: dict[str, Any]) -> TigoSummary:
     )
 
 
-def parse_alerts_response(payload: dict[str, Any]) -> list[TigoAlert]:
-    return [
+def parse_alerts_response(payload: dict[str, Any]) -> TigoPage[TigoAlert]:
+    total, page, limit, links = _extract_page_meta(payload)
+    items = [
         TigoAlert(
             alert_id=int(item["alert_id"]),
             added=_parse_datetime(item.get("added")),
@@ -293,6 +314,7 @@ def parse_alerts_response(payload: dict[str, Any]) -> list[TigoAlert]:
         )
         for item in payload.get("alerts", [])
     ]
+    return TigoPage(items=items, total=total, page=page, limit=limit, links=links, raw=payload)
 
 
 def parse_alert_types_response(payload: dict[str, Any]) -> list[TigoAlertType]:

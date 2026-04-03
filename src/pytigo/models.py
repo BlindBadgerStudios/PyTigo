@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Generic, TypeVar
+
+T = TypeVar("T")
 
 
 @dataclass(slots=True)
@@ -204,6 +206,16 @@ class TigoAlertType:
     title: str | None
     description: str | None
     unique_id: int | None
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class TigoPage(Generic[T]):
+    items: list[T]
+    total: int | None = None
+    page: int | None = None
+    limit: int | None = None
+    links: dict[str, str] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
 
 

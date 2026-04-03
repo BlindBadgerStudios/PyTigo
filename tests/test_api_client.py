@@ -81,7 +81,7 @@ def test_official_client_methods():
     auth = client.login()
     assert auth.auth_token == "token-abc"
     assert client.get_current_user().email == "user@example.com"
-    assert client.list_systems()[0].system_id == TEST_SYSTEM_ID
+    assert client.list_systems().items[0].system_id == TEST_SYSTEM_ID
     assert client.get_system(TEST_SYSTEM_ID).name == "Example Site"
     assert client.get_layout(TEST_SYSTEM_ID).system_id == TEST_SYSTEM_ID
     assert client.get_objects(TEST_SYSTEM_ID) == []
@@ -90,7 +90,7 @@ def test_official_client_methods():
     assert client.get_summary(TEST_SYSTEM_ID).daily_energy_dc == 123.4
     assert client.get_aggregate(TEST_SYSTEM_ID, start="2026-03-31T00:00:00", end="2026-03-31T23:59:59").rows[0].values["1"] == 5.0
     assert client.get_combined(TEST_SYSTEM_ID, start="2026-03-31T00:00:00", end="2026-03-31T23:59:59", agg="day").rows[0].values["1"] == 5.0
-    assert client.get_alerts(TEST_SYSTEM_ID)[0].unique_id == 106
+    assert client.get_alerts(TEST_SYSTEM_ID).items[0].unique_id == 106
     assert client.get_alert_types()[0].unique_id == 300
     assert client.logout()["status"] == 200
     assert client.auth is None
