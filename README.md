@@ -26,7 +26,7 @@ Supported official API areas:
 ## Install
 
 ```bash
-pip install -e .
+pip install pytigo
 ```
 
 ## Quick start
