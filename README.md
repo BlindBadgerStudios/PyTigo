@@ -1,8 +1,8 @@
 # pytigo
 
-pytigo is a Python client for the documented Tigo REST API v3.
+pytigo is a Python client for the documented Tigo REST API v3.  It is focussed on near-real time monitoring (for time-series systems like Prometheus).
 
-It is now centered on the official API described in Tigo-API-V3.pdf, using:
+It is centered on the official API described in Tigo-API-V3.pdf, using:
 - base URL: https://api2.tigoenergy.com/api/v3/
 - token auth from `users/login`
 - documented systems, objects, sources, and data endpoints
@@ -78,20 +78,4 @@ The library returns typed Python models for JSON endpoints and a parsed table mo
 
 `data/aggregate` and `data/combined` are especially useful for exporter/monitoring use cases because they preserve timestamped telemetry in a table-shaped format that is easy to flatten for Prometheus, Grafana, or ETL pipelines.
 
-## Development
 
-```bash
-python -m pytest -q
-```
-
-## PyPI-ready validation
-
-Before publishing, build and validate the package locally:
-
-```bash
-python -m pip install -e '.[dev]'
-python -m build
-python -m twine check dist/*
-```
-
-This repo is prepared for that flow, but it has not been published yet.
