@@ -4,8 +4,8 @@ from pytigo import TigoClient
 def main() -> None:
     client = TigoClient(username="you@example.com", password="super-secret")
     auth = client.login()
-    systems = client.list_systems()
-    system = systems[0]
+    page = client.list_systems()
+    system = page.items[0]
 
     print(f"user_id={auth.user_id}")
     print(f"system_id={system.system_id}")
