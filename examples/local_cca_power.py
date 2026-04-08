@@ -24,6 +24,29 @@ UTC = timezone.utc
 from pytigo import TigoCCAClient
 
 
+def _find_latest_nonzero_row(client: TigoCCAClient, system_id: int, object_ids: list[int], end: datetime) -> tuple[datetime | None, dict[str, float | None]]:
+    """
+    Find the latest timestamp with any non-zero Pin telemetry.
+
+    The CCA's reported `lastData` timestamp can extend beyond the last row that
+    actually contains module telemetry, so we scan from local midnight to `end`
+    and then walk backward to locate the freshest populated row.
+    """
+    start_of_day = end.replace(hour=0, minute=0, second=0, microsecond=0)
+    table = client.get_aggregate(
+        system_id,
+        start=start_of_day.strftime("%Y-%m-%dT%H:%M:%S"),
+        end=end.strftime("%Y-%m-%dT%H:%M:%S"),
+        level="min",
+        param="Pin",
+        object_ids=object_ids,
+    )
+    for row in reversed(table.rows):
+        if any(isinstance(v, (int, float)) and v > 0 for v in row.values.values()):
+            return row.timestamp, row.values
+    return None, {}
+
+
 def main() -> None:
     host = os.environ.get("TIGO_LOCAL_HOST")
     if not host:
@@ -89,13 +112,24 @@ def main() -> None:
     print(f"  Found {len(panels)} panels across {len(layout.inverters)} inverter(s)")
 
     # --- Telemetry: Pin (power) ---
-    end = datetime.now(tz=UTC)
+    object_ids = [p["object_id"] for p in panels]
+
+    if summary.updated_on is not None:
+        search_end = summary.updated_on
+    else:
+        search_end = datetime.now(tz=UTC).replace(tzinfo=None)
+
+    latest_ts, _ = _find_latest_nonzero_row(client, system_id, object_ids, search_end)
+    if latest_ts is None:
+        print("No non-zero Pin telemetry found between local midnight and the latest device timestamp.")
+        sys.exit(0)
+
+    end = latest_ts
     start = end - timedelta(minutes=window_minutes)
     start_str = start.strftime("%Y-%m-%dT%H:%M:%S")
     end_str = end.strftime("%Y-%m-%dT%H:%M:%S")
-    object_ids = [p["object_id"] for p in panels]
 
-    print(f"\nFetching Pin telemetry ({window_minutes}-min window: {start_str} → {end_str} UTC)...")
+    print(f"\nFetching Pin telemetry around latest populated sample ({window_minutes}-min window: {start_str} → {end_str} UTC)...")
     table = client.get_aggregate(
         system_id,
         start=start_str,
@@ -106,7 +140,7 @@ def main() -> None:
     )
 
     if not table.rows:
-        print("No telemetry rows returned. The system may not have recent data.")
+        print("No telemetry rows returned in the latest populated window.")
         sys.exit(0)
 
     # Walk rows in reverse to find the most recent non-null value per panel
@@ -122,7 +156,7 @@ def main() -> None:
         if len(latest) == len(panels):
             break
 
-    print(f"\n--- Per-Panel Power (most recent sample in last {window_minutes} min) ---")
+    print(f"\n--- Per-Panel Power (most recent sample in latest populated {window_minutes}-min window) ---")
     header = f"{'Label':<12} {'Inverter':<14} {'String':<12} {'Power (W)':>10}  {'Timestamp (UTC)'}"
     print(header)
     print("-" * len(header))

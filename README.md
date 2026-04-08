@@ -9,7 +9,7 @@ Two backends are provided, both satisfying `TigoClientProtocol`:
 | Transport | HTTPS to `api2.tigoenergy.com` | HTTP to CCA device on LAN |
 | Auth | Bearer token (username + password login) | HTTP Basic Auth |
 | System ID | From cloud account | Read from device `summary_config` |
-| Telemetry params | Pin, Vin, Iin, RSSI, Temp, Tmod, Tcell, Tamb | **Pin and Vin only** |
+| Telemetry params | Pin, Vin, Iin, RSSI, Temp, Tmod, Tcell, Tamb | **Pin, Vin, RSSI** |
 | Lifetime energy | Yes | **Not available (returns `None`)** |
 | YTD energy | Yes | **Not available (returns `None`)** |
 | Daily energy | Yes | Yes (~12-day rolling window) |
@@ -68,6 +68,8 @@ client = TigoCCAClient(
     username="Tigo",
     password="$olar",
     tz_offset_seconds=-18000,
+    # opt-in exploratory mode for raw temp variants like Iin/Tmod/Tcell/Tamb/Power
+    enable_raw_temp_variants=False,
 )
 client.login()  # probes the device and builds topology cache
 
@@ -77,12 +79,18 @@ system = systems.items[0]  # always one entry for the local device
 layout = client.get_layout(system.system_id)
 summary = client.get_summary(system.system_id)
 
-# Only Pin (power) and Vin (voltage) are available locally
+# Pin (power), Vin (voltage), and RSSI are available locally
 aggregate = client.get_aggregate(
     system.system_id,
     start="2026-04-06T12:00:00",
     end="2026-04-06T12:15:00",
     param="Pin",
+)
+rssi = client.get_aggregate(
+    system.system_id,
+    start="2026-04-06T12:00:00",
+    end="2026-04-06T12:15:00",
+    param="RSSI",
 )
 ```
 
@@ -111,6 +119,58 @@ def fetch_summary(client: TigoClientProtocol, system_id: int):
 - sources/system
 - data/summary, data/aggregate, data/combined
 - alerts/system, alerts/types
+
+## Local CCA status (verified against a live device)
+
+Verified with local credentials `Tigo` / `$olar` on a CCA at `192.168.192.114`:
+
+Available local data endpoints:
+- `/cgi-bin/summary_jsconfig`
+- `/cgi-bin/summary_config`
+- `/cgi-bin/summary_energy`
+- `/cgi-bin/summary_data?date=YYYY-MM-DD`
+- `/cgi-bin/summary` -> redirects to `/summary/`
+- `/summary/` -> authenticated UI page that uses the endpoints above
+
+Known endpoints currently blocked by available credentials:
+- `/cgi-bin/info` -> returns `Access Denied.`
+- `/cgi-bin/network` -> returns `Access Denied.`
+
+These should be re-checked in the future if higher-privilege credentials become available.
+
+## Local summary_data temp variants
+
+The local CCA accepts `temp=` variants on `/cgi-bin/summary_data`.
+
+Verified distinct variants:
+- `pin` -> power-like panel telemetry used by local power example/client
+- `vin` -> panel voltage telemetry
+- `rssi` -> panel wireless signal telemetry
+
+Accepted but not distinct on the tested device:
+- `iin`
+- `tmod`
+- `tcell`
+- `tamb`
+- `power`
+
+On the tested CCA, those variants returned the same payload as `pin`.
+They are available only in opt-in exploratory mode by constructing `TigoCCAClient(..., enable_raw_temp_variants=True)` and calling:
+- `param="Iin"`
+- `param="Tmod"`
+- `param="Tcell"`
+- `param="Tamb"`
+- `param="Power"`
+
+Because these were not distinct on the verified device, they should be treated as raw/debug data rather than stable semantic metrics.
+
+Observed but empty on the tested device:
+- `temp` -> HTTP 200 with empty body
+
+## Local examples
+
+- `examples/local_cca_power.py` -> auto-finds the latest populated Pin window and prints per-panel power
+- `examples/local_cca_endpoints.py` -> probes local summary/info/network endpoints and enumerates `temp=` variants
 
 ## Notes
 

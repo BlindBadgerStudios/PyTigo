@@ -41,8 +41,10 @@ class TigoCCAClient:
 
     Limitations vs cloud (TigoClient):
     - lifetime_energy_dc and ytd_energy_dc are not available; both return None.
-    - Only Pin (power, W) and Vin (voltage, V) telemetry params are supported;
-      all other params (Iin, RSSI, Temp, etc.) return an empty table.
+    - Pin (power, W), Vin (voltage, V), and RSSI telemetry are supported.
+      Other local temp variants accepted by the device (Iin, Tmod, Tcell,
+      Tamb, power) are not exposed here because, on the tested device, they
+      returned the same payload as Pin rather than distinct telemetry.
     - The CCA has no MPPT layer; one synthetic MPPT is created per string.
     - get_alerts() always returns an empty page.
     - No serial numbers, panel types, or sw_version information is available.
@@ -53,6 +55,13 @@ class TigoCCAClient:
     (positive = local time is ahead of UTC, e.g. UTC+1 → 3600; negative for west
     of UTC, e.g. UTC-5 → -18000).  Set this so that returned timestamps align with
     the UTC expectations of consumers.  Defaults to 0 (CCA clock treated as UTC).
+
+    Raw temp variants:
+    Some CCAs accept additional `temp=` values on `/cgi-bin/summary_data` such as
+    `iin`, `tmod`, `tcell`, `tamb`, and `power`.  These are device-specific and, on
+    the verified device, they returned the same payload as `pin`.  They are therefore
+    hidden by default.  Set `enable_raw_temp_variants=True` to expose them via
+    get_aggregate() for exploratory/debug use.
     """
 
     def __init__(
@@ -64,12 +73,14 @@ class TigoCCAClient:
         session: Session | None = None,
         timeout: int = 30,
         tz_offset_seconds: int = 0,
+        enable_raw_temp_variants: bool = False,
     ) -> None:
         self.host = host.rstrip("/")
         self.username = username
         self.password = password
         self.timeout = timeout
         self.tz_offset_seconds = tz_offset_seconds
+        self.enable_raw_temp_variants = enable_raw_temp_variants
         self.session = session or Session()
         self.session.auth = (username, password)
         # populated by _build_topology(), called during login()
@@ -403,17 +414,33 @@ class TigoCCAClient:
         """
         Return per-module telemetry for the given UTC time window.
 
-        Supported params: Pin (power, W) and Vin (voltage, V).
-        All other params return an empty table; they are not available from the
-        local CCA.
+        Supported params: Pin (power, W), Vin (voltage, V), and RSSI.
+        When `enable_raw_temp_variants=True`, exploratory raw variants are also
+        exposed: Iin, Tmod, Tcell, Tamb, and Power.
+        Other params return an empty table.
 
         Timestamps in the returned table are adjusted from local CCA time to UTC
         using tz_offset_seconds.  level='hour' and level='day' are not natively
         supported; minute-resolution data is returned regardless.
         """
-        if param not in ("Pin", "Vin"):
+        param_specs: dict[str, tuple[str, str]] = {
+            "Pin": ("pin", "power"),
+            "Vin": ("vin", "vin"),
+            "RSSI": ("rssi", "rssi"),
+        }
+        if self.enable_raw_temp_variants:
+            param_specs.update({
+                "Iin": ("iin", "raw"),
+                "Tmod": ("tmod", "raw"),
+                "Tcell": ("tcell", "raw"),
+                "Tamb": ("tamb", "raw"),
+                "Power": ("power", "raw"),
+            })
+        spec = param_specs.get(param)
+        if spec is None:
             logger.debug("Param %s not supported by local CCA; returning empty table", param)
             return TigoCSVTable(headers=[], rows=[], raw_text="")
+        temp_name, value_mode = spec
 
         start_dt = _parse_iso(start)
         end_dt = _parse_iso(end)
@@ -429,7 +456,7 @@ class TigoCCAClient:
         query_date = local_start.date()
         while query_date <= local_end.date():
             try:
-                day_rows = self._fetch_day_rows(query_date, param, local_start, local_end)
+                day_rows = self._fetch_day_rows(query_date, temp_name, value_mode, local_start, local_end)
                 all_rows.extend(day_rows)
             except Exception:
                 logger.debug("Failed to fetch %s data for %s", param, query_date, exc_info=True)
@@ -453,19 +480,21 @@ class TigoCCAClient:
     def _fetch_day_rows(
         self,
         query_date: date,
-        param: str,
+        temp_name: str,
+        value_mode: str,
         local_start: datetime,
         local_end: datetime,
     ) -> list[tuple[datetime, dict[str, float | None]]]:
         """Fetch one day of CCA data and return rows within [local_start, local_end]."""
-        data = self._get("/cgi-bin/summary_data", params={"date": query_date.strftime("%Y-%m-%d")})
+        data = self._get(
+            "/cgi-bin/summary_data",
+            params={"date": query_date.strftime("%Y-%m-%d"), "temp": temp_name},
+        )
         datasets = data.get("dataset", [])
-        # dataset[0] = power (W), dataset[1] = voltage (tenths of a volt)
-        dataset_index = 0 if param == "Pin" else 1
-        if dataset_index >= len(datasets):
+        if not datasets:
             return []
 
-        dataset = datasets[dataset_index]
+        dataset = datasets[0]
         order: list[str] = dataset.get("order", [])
         result: list[tuple[datetime, dict[str, float | None]]] = []
 
@@ -488,7 +517,7 @@ class TigoCCAClient:
                 raw = d[i] if i < len(d) else None
                 if raw == "-" or raw is None:
                     values[label] = None
-                elif param == "Vin":
+                elif value_mode == "vin":
                     values[label] = float(raw) / 10.0  # tenths of a volt → volts
                 else:
                     values[label] = float(raw) if isinstance(raw, (int, float)) else None
