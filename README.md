@@ -172,6 +172,10 @@ Observed but empty on the tested device:
 - `examples/local_cca_power.py` -> auto-finds the latest populated Pin window and prints per-panel power
 - `examples/local_cca_endpoints.py` -> probes local summary/info/network endpoints and enumerates `temp=` variants
 
+## Cloud live validation example
+
+- `examples/cloud_live_validation.py` -> validates the official API v3 end-to-end against a real account and explicitly reports the known `aggregate` / `combined` limitation when those endpoints return only `Datetime`
+
 ## Notes
 
 The library returns typed Python dataclasses for JSON endpoints and a parsed `TigoCSVTable` for timestamped telemetry (`data/aggregate`, `data/combined`).  The table format is designed for easy flattening into Prometheus, Grafana, or ETL pipelines.
