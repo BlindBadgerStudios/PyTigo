@@ -142,3 +142,40 @@ def test_local_aggregate_merges_all_datasets_and_derives_iin():
     assert len(rssi.rows) == 1
     assert rssi.rows[-1].values["1"] == 150.0
     assert rssi.rows[-1].values["2"] == 160.0
+
+
+def test_local_vin_auto_detects_direct_volts_without_scaling():
+    session = FakeSession()
+
+    original_get = session.get
+    def custom_get(url, **kwargs):
+        params = kwargs.get('params') or {}
+        if url.endswith('/cgi-bin/summary_data') and params.get('temp') == 'vin':
+            return FakeResponse(json_data={
+                'lastData': '2026-04-08 23:59:59.000',
+                'dataset': [
+                    {
+                        'order': ['A1', 'A2'],
+                        'data': [
+                            {'t': '11:43', 'd': [31, 30]},
+                        ],
+                    }
+                ],
+            })
+        return original_get(url, **kwargs)
+
+    session.get = custom_get
+    client = TigoCCAClient(
+        host='192.168.1.100',
+        username='Tigo',
+        password='$olar',
+        session=session,
+        enable_raw_temp_variants=True,
+    )
+    client.login()
+    system = client.list_systems().items[0]
+
+    vin = client.get_aggregate(system.system_id, start='2026-04-08T11:00:00', end='2026-04-08T12:00:00', param='Vin')
+    assert len(vin.rows) == 1
+    assert vin.rows[0].values['1'] == 31.0
+    assert vin.rows[0].values['2'] == 30.0

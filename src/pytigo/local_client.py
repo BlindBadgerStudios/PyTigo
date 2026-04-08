@@ -511,6 +511,7 @@ class TigoCCAClient:
         base_date: date,
         value_mode: str,
     ) -> list[tuple[datetime, dict[str, float | None]]]:
+        vin_scale = self._detect_local_vin_scale(data) if value_mode == "vin" else 1.0
         rows: list[tuple[datetime, dict[str, float | None]]] = []
         for dataset in data.get("dataset", []):
             order: list[str] = dataset.get("order", [])
@@ -531,12 +532,23 @@ class TigoCCAClient:
                     if raw == "-" or raw is None:
                         values[label] = None
                     elif value_mode == "vin":
-                        values[label] = float(raw) / 10.0
+                        values[label] = float(raw) / vin_scale
                     else:
                         values[label] = float(raw) if isinstance(raw, (int, float)) else None
                 rows.append((local_ts, values))
         rows.sort(key=lambda item: item[0])
         return rows
+
+    def _detect_local_vin_scale(self, data: dict[str, Any]) -> float:
+        max_positive = 0.0
+        for dataset in data.get("dataset", []):
+            for row in dataset.get("data", []):
+                for raw in row.get("d", []):
+                    if isinstance(raw, (int, float)) and raw > max_positive:
+                        max_positive = float(raw)
+        # Some CCAs return volts directly (e.g. 30-31), while others appear to
+        # return tenths of a volt (e.g. 300-310). Auto-detect per payload.
+        return 10.0 if max_positive >= 100.0 else 1.0
 
     def _derive_current_rows(
         self,

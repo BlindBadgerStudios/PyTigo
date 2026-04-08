@@ -156,6 +156,8 @@ Verified distinct variants:
 Derived variant exposed by the library:
 - `Iin` -> panel current derived from `Pin / Vin` because the tested device's raw `temp=iin` payload matched `temp=pin`
 
+For local `Vin`, the library auto-detects whether the CCA payload is already in volts (e.g. `30-31`) or in tenths of a volt (e.g. `300-310`) and scales accordingly.
+
 Accepted but not distinct on the tested device:
 - `tmod`
 - `tcell`
