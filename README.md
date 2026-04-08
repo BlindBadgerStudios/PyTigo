@@ -9,7 +9,7 @@ Two backends are provided, both satisfying `TigoClientProtocol`:
 | Transport | HTTPS to `api2.tigoenergy.com` | HTTP to CCA device on LAN |
 | Auth | Bearer token (username + password login) | HTTP Basic Auth |
 | System ID | From cloud account | Read from device `summary_config` |
-| Telemetry params | Pin, Vin, Iin, RSSI, Temp, Tmod, Tcell, Tamb | **Pin, Vin, RSSI** |
+| Telemetry params | Pin, Vin, Iin, RSSI, Temp, Tmod, Tcell, Tamb | **Pin, Vin, RSSI, derived Iin** |
 | Lifetime energy | Yes | **Not available (returns `None`)** |
 | YTD energy | Yes | **Not available (returns `None`)** |
 | Daily energy | Yes | Yes (~12-day rolling window) |
@@ -79,7 +79,7 @@ system = systems.items[0]  # always one entry for the local device
 layout = client.get_layout(system.system_id)
 summary = client.get_summary(system.system_id)
 
-# Pin (power), Vin (voltage), and RSSI are available locally
+# Pin (power), Vin (voltage), RSSI, and derived Iin are available locally
 aggregate = client.get_aggregate(
     system.system_id,
     start="2026-04-06T12:00:00",
@@ -91,6 +91,12 @@ rssi = client.get_aggregate(
     start="2026-04-06T12:00:00",
     end="2026-04-06T12:15:00",
     param="RSSI",
+)
+iin = client.get_aggregate(
+    system.system_id,
+    start="2026-04-06T12:00:00",
+    end="2026-04-06T12:15:00",
+    param="Iin",
 )
 ```
 
@@ -147,8 +153,10 @@ Verified distinct variants:
 - `vin` -> panel voltage telemetry
 - `rssi` -> panel wireless signal telemetry
 
+Derived variant exposed by the library:
+- `Iin` -> panel current derived from `Pin / Vin` because the tested device's raw `temp=iin` payload matched `temp=pin`
+
 Accepted but not distinct on the tested device:
-- `iin`
 - `tmod`
 - `tcell`
 - `tamb`
@@ -156,7 +164,6 @@ Accepted but not distinct on the tested device:
 
 On the tested CCA, those variants returned the same payload as `pin`.
 They are available only in opt-in exploratory mode by constructing `TigoCCAClient(..., enable_raw_temp_variants=True)` and calling:
-- `param="Iin"`
 - `param="Tmod"`
 - `param="Tcell"`
 - `param="Tamb"`

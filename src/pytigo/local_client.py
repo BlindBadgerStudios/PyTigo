@@ -41,10 +41,11 @@ class TigoCCAClient:
 
     Limitations vs cloud (TigoClient):
     - lifetime_energy_dc and ytd_energy_dc are not available; both return None.
-    - Pin (power, W), Vin (voltage, V), and RSSI telemetry are supported.
-      Other local temp variants accepted by the device (Iin, Tmod, Tcell,
-      Tamb, power) are not exposed here because, on the tested device, they
-      returned the same payload as Pin rather than distinct telemetry.
+    - Pin (power, W), Vin (voltage, V), RSSI, and derived Iin telemetry are supported.
+      In local mode, Iin is derived from Pin / Vin because the tested CCA's raw
+      `temp=iin` payload matched `temp=pin` rather than exposing distinct current.
+      Other local temp variants accepted by the device (Tmod, Tcell, Tamb,
+      power) remain exploratory/debug-only.
     - The CCA has no MPPT layer; one synthetic MPPT is created per string.
     - get_alerts() always returns an empty page.
     - No serial numbers, panel types, or sw_version information is available.
@@ -58,10 +59,11 @@ class TigoCCAClient:
 
     Raw temp variants:
     Some CCAs accept additional `temp=` values on `/cgi-bin/summary_data` such as
-    `iin`, `tmod`, `tcell`, `tamb`, and `power`.  These are device-specific and, on
-    the verified device, they returned the same payload as `pin`.  They are therefore
-    hidden by default.  Set `enable_raw_temp_variants=True` to expose them via
-    get_aggregate() for exploratory/debug use.
+    `tmod`, `tcell`, `tamb`, and `power`. These are device-specific and, on the
+    verified device, they returned the same payload as `pin`. They are therefore
+    hidden by default. Set `enable_raw_temp_variants=True` to expose them via
+    get_aggregate() for exploratory/debug use. Iin is treated separately and is
+    derived from Pin / Vin in local mode.
     """
 
     def __init__(
@@ -370,24 +372,23 @@ class TigoCCAClient:
             logger.debug("Could not fetch summary_energy", exc_info=True)
 
         try:
-            data = self._get("/cgi-bin/summary_data", params={"date": local_today.strftime("%Y-%m-%d")})
-            raw_ts = data.get("lastData")
-            if raw_ts:
-                local_dt = _parse_cca_datetime(raw_ts)
-                if local_dt:
-                    updated_on = self._local_to_utc(local_dt)
-
-            datasets = data.get("dataset", [])
-            if datasets:
-                power_ds = datasets[0]
-                for row in reversed(power_ds.get("data", [])):
-                    d = row.get("d", [])
-                    if not d:
-                        continue
-                    total = sum(v for v in d if isinstance(v, (int, float)) and v >= 0)
-                    if total > 0:
-                        last_power = float(total)
-                        break
+            data = self._get("/cgi-bin/summary_data", params={"date": local_today.strftime("%Y-%m-%d"), "temp": "pin"})
+            rows = self._parse_summary_data_rows(data, base_date=local_today, value_mode="power")
+            for local_ts, values_by_label in reversed(rows):
+                numeric = [v for v in values_by_label.values() if isinstance(v, (int, float)) and v >= 0]
+                if not numeric:
+                    continue
+                total = sum(numeric)
+                if total > 0:
+                    last_power = float(total)
+                    updated_on = self._local_to_utc(local_ts)
+                    break
+            if updated_on is None:
+                raw_ts = data.get("lastData")
+                if raw_ts:
+                    local_dt = _parse_cca_datetime(raw_ts)
+                    if local_dt:
+                        updated_on = self._local_to_utc(local_dt)
         except Exception:
             logger.debug("Could not fetch summary_data for summary", exc_info=True)
 
@@ -414,23 +415,24 @@ class TigoCCAClient:
         """
         Return per-module telemetry for the given UTC time window.
 
-        Supported params: Pin (power, W), Vin (voltage, V), and RSSI.
+        Supported params: Pin (power, W), Vin (voltage, V), RSSI, and derived
+        Iin (amps, computed from Pin / Vin when voltage is available).
         When `enable_raw_temp_variants=True`, exploratory raw variants are also
-        exposed: Iin, Tmod, Tcell, Tamb, and Power.
+        exposed: Tmod, Tcell, Tamb, and Power.
         Other params return an empty table.
 
         Timestamps in the returned table are adjusted from local CCA time to UTC
         using tz_offset_seconds.  level='hour' and level='day' are not natively
         supported; minute-resolution data is returned regardless.
         """
-        param_specs: dict[str, tuple[str, str]] = {
+        param_specs: dict[str, tuple[str | None, str]] = {
             "Pin": ("pin", "power"),
             "Vin": ("vin", "vin"),
             "RSSI": ("rssi", "rssi"),
+            "Iin": (None, "derived_iin"),
         }
         if self.enable_raw_temp_variants:
             param_specs.update({
-                "Iin": ("iin", "raw"),
                 "Tmod": ("tmod", "raw"),
                 "Tcell": ("tcell", "raw"),
                 "Tamb": ("tamb", "raw"),
@@ -456,7 +458,12 @@ class TigoCCAClient:
         query_date = local_start.date()
         while query_date <= local_end.date():
             try:
-                day_rows = self._fetch_day_rows(query_date, temp_name, value_mode, local_start, local_end)
+                if value_mode == "derived_iin":
+                    pin_rows = self._fetch_day_rows(query_date, "pin", "power", local_start, local_end)
+                    vin_rows = self._fetch_day_rows(query_date, "vin", "vin", local_start, local_end)
+                    day_rows = self._derive_current_rows(pin_rows, vin_rows)
+                else:
+                    day_rows = self._fetch_day_rows(query_date, temp_name, value_mode, local_start, local_end)
                 all_rows.extend(day_rows)
             except Exception:
                 logger.debug("Failed to fetch %s data for %s", param, query_date, exc_info=True)
@@ -490,41 +497,69 @@ class TigoCCAClient:
             "/cgi-bin/summary_data",
             params={"date": query_date.strftime("%Y-%m-%d"), "temp": temp_name},
         )
-        datasets = data.get("dataset", [])
-        if not datasets:
-            return []
+        rows = self._parse_summary_data_rows(data, base_date=query_date, value_mode=value_mode)
+        return [
+            (local_ts, values)
+            for local_ts, values in rows
+            if local_start <= local_ts <= local_end
+        ]
 
-        dataset = datasets[0]
-        order: list[str] = dataset.get("order", [])
-        result: list[tuple[datetime, dict[str, float | None]]] = []
+    def _parse_summary_data_rows(
+        self,
+        data: dict[str, Any],
+        *,
+        base_date: date,
+        value_mode: str,
+    ) -> list[tuple[datetime, dict[str, float | None]]]:
+        rows: list[tuple[datetime, dict[str, float | None]]] = []
+        for dataset in data.get("dataset", []):
+            order: list[str] = dataset.get("order", [])
+            for row in dataset.get("data", []):
+                t_str = row.get("t", "")
+                if not t_str:
+                    continue
+                try:
+                    h, m = map(int, t_str.split(":"))
+                    local_ts = datetime(base_date.year, base_date.month, base_date.day, h, m)
+                except (ValueError, TypeError):
+                    continue
 
-        for row in dataset.get("data", []):
-            t_str = row.get("t", "")
-            if not t_str:
+                d: list[Any] = row.get("d", [])
+                values: dict[str, float | None] = {}
+                for i, label in enumerate(order):
+                    raw = d[i] if i < len(d) else None
+                    if raw == "-" or raw is None:
+                        values[label] = None
+                    elif value_mode == "vin":
+                        values[label] = float(raw) / 10.0
+                    else:
+                        values[label] = float(raw) if isinstance(raw, (int, float)) else None
+                rows.append((local_ts, values))
+        rows.sort(key=lambda item: item[0])
+        return rows
+
+    def _derive_current_rows(
+        self,
+        pin_rows: list[tuple[datetime, dict[str, float | None]]],
+        vin_rows: list[tuple[datetime, dict[str, float | None]]],
+    ) -> list[tuple[datetime, dict[str, float | None]]]:
+        vin_by_ts = {ts: values for ts, values in vin_rows}
+        derived: list[tuple[datetime, dict[str, float | None]]] = []
+        for ts, pin_values in pin_rows:
+            voltage_values = vin_by_ts.get(ts)
+            if voltage_values is None:
                 continue
-            try:
-                h, m = map(int, t_str.split(":"))
-                local_ts = datetime(query_date.year, query_date.month, query_date.day, h, m)
-            except (ValueError, TypeError):
-                continue
-
-            if local_ts < local_start or local_ts > local_end:
-                continue
-
-            d: list[Any] = row.get("d", [])
-            values: dict[str, float | None] = {}
-            for i, label in enumerate(order):
-                raw = d[i] if i < len(d) else None
-                if raw == "-" or raw is None:
-                    values[label] = None
-                elif value_mode == "vin":
-                    values[label] = float(raw) / 10.0  # tenths of a volt → volts
+            derived_values: dict[str, float | None] = {}
+            labels = set(pin_values) | set(voltage_values)
+            for label in labels:
+                watts = pin_values.get(label)
+                volts = voltage_values.get(label)
+                if watts is None or volts is None or volts <= 0:
+                    derived_values[label] = None
                 else:
-                    values[label] = float(raw) if isinstance(raw, (int, float)) else None
-
-            result.append((local_ts, values))
-
-        return result
+                    derived_values[label] = watts / volts
+            derived.append((ts, derived_values))
+        return derived
 
     def get_alerts(
         self,
