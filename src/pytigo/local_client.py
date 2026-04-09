@@ -146,6 +146,45 @@ class TigoCCAClient:
                 return local_ts, values_by_label
         return None
 
+    def _candidate_device_dates(self, hinted_date: date | None = None) -> list[date]:
+        candidates: list[date] = []
+
+        def add(candidate: date | None) -> None:
+            if candidate is None:
+                return
+            if candidate not in candidates:
+                candidates.append(candidate)
+
+        add(hinted_date)
+        add(self._last_device_date)
+        add(self._utc_to_local(datetime.utcnow()).date())
+        return candidates
+
+    def _select_freshest_summary_day(self) -> tuple[date, dict[str, Any], tuple[datetime, dict[str, float | None]] | None]:
+        best_date: date | None = None
+        best_data: dict[str, Any] | None = None
+        best_row: tuple[datetime, dict[str, float | None]] | None = None
+
+        for candidate_date in self._candidate_device_dates(self._get_device_local_date()):
+            data = self._get('/cgi-bin/summary_data', params={'date': candidate_date.strftime('%Y-%m-%d'), 'temp': 'pin'})
+            rows = self._parse_summary_data_rows(data, base_date=candidate_date, value_mode='power')
+            latest_row = self._latest_populated_row(rows)
+            if latest_row is None:
+                continue
+            if best_row is None or latest_row[0] > best_row[0]:
+                best_date = candidate_date
+                best_data = data
+                best_row = latest_row
+
+        if best_date is not None and best_data is not None:
+            self._last_device_date = best_date
+            return best_date, best_data, best_row
+
+        fallback_date = self._get_device_local_date(refresh=False)
+        fallback_data = self._get('/cgi-bin/summary_data', params={'date': fallback_date.strftime('%Y-%m-%d'), 'temp': 'pin'})
+        fallback_rows = self._parse_summary_data_rows(fallback_data, base_date=fallback_date, value_mode='power')
+        return fallback_date, fallback_data, self._latest_populated_row(fallback_rows)
+
     def _build_topology(self) -> None:
         """
         Fetch summary_config and build the internal panel-label → object_id mapping.
@@ -354,13 +393,15 @@ class TigoCCAClient:
         self._ensure_topology()
         last_checkin: datetime | None = None
         try:
-            device_date = self._get_device_local_date()
-            data = self._get("/cgi-bin/summary_data", params={"date": device_date.strftime("%Y-%m-%d")})
-            raw_ts = data.get("lastData")
-            if raw_ts:
-                local_dt = _parse_cca_datetime(raw_ts)
-                if local_dt:
-                    last_checkin = self._local_to_utc(local_dt)
+            device_date, data, latest_row = self._select_freshest_summary_day()
+            if latest_row is not None:
+                last_checkin = self._local_to_utc(latest_row[0])
+            else:
+                raw_ts = data.get("lastData")
+                if raw_ts:
+                    local_dt = _parse_cca_datetime(raw_ts)
+                    if local_dt:
+                        last_checkin = self._local_to_utc(local_dt)
         except Exception:
             logger.debug("Could not fetch lastData for source checkin", exc_info=True)
 
@@ -399,6 +440,13 @@ class TigoCCAClient:
         updated_on: datetime | None = None
 
         try:
+            device_date, data, latest_row = self._select_freshest_summary_day()
+        except Exception:
+            logger.debug("Could not fetch summary_data for summary", exc_info=True)
+            data = None
+            latest_row = None
+
+        try:
             energy_rows = self._get("/cgi-bin/summary_energy")
             today_str = device_date.strftime("%Y-%m-%d")
             for entry in energy_rows:
@@ -409,22 +457,19 @@ class TigoCCAClient:
             logger.debug("Could not fetch summary_energy", exc_info=True)
 
         try:
-            data = self._get("/cgi-bin/summary_data", params={"date": device_date.strftime("%Y-%m-%d"), "temp": "pin"})
-            rows = self._parse_summary_data_rows(data, base_date=device_date, value_mode="power")
-            latest_row = self._latest_populated_row(rows)
             if latest_row is not None:
                 local_ts, values_by_label = latest_row
                 numeric = [v for v in values_by_label.values() if isinstance(v, (int, float)) and v >= 0]
                 last_power = float(sum(numeric))
                 updated_on = self._local_to_utc(local_ts)
-            if updated_on is None:
+            if updated_on is None and data is not None:
                 raw_ts = data.get("lastData")
                 if raw_ts:
                     local_dt = _parse_cca_datetime(raw_ts)
                     if local_dt:
                         updated_on = self._local_to_utc(local_dt)
         except Exception:
-            logger.debug("Could not fetch summary_data for summary", exc_info=True)
+            logger.debug("Could not parse summary_data for summary", exc_info=True)
 
         return TigoSummary(
             lifetime_energy_dc=None,  # Not available from local CCA

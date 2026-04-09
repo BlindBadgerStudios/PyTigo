@@ -113,19 +113,28 @@ def build_client() -> TigoCCAClient:
 def test_local_summary_uses_latest_dataset_segment():
     client = build_client()
     system = client.list_systems().items[0]
-    summary = client.get_summary(system.system_id)
+    original_utc_to_local = client._utc_to_local
+    client._utc_to_local = lambda dt: __import__('datetime').datetime(2026, 4, 8, 12, 0)
+    try:
+        summary = client.get_summary(system.system_id)
+    finally:
+        client._utc_to_local = original_utc_to_local
     assert summary.daily_energy_dc == 1234.0
     assert summary.last_power_dc == 641.0
     assert str(summary.updated_on) == "2026-04-08 10:47:00"
 
 
-def test_local_sources_use_device_date_for_last_checkin():
+def test_local_sources_use_latest_populated_row_for_last_checkin():
     client = build_client()
     system = client.list_systems().items[0]
-    sources = client.get_sources(system.system_id)
+    original_utc_to_local = client._utc_to_local
+    client._utc_to_local = lambda dt: __import__('datetime').datetime(2026, 4, 8, 12, 0)
+    try:
+        sources = client.get_sources(system.system_id)
+    finally:
+        client._utc_to_local = original_utc_to_local
     assert len(sources) == 1
-    assert str(sources[0].last_checkin) == "2026-04-08 23:59:59"
-
+    assert str(sources[0].last_checkin) == "2026-04-08 10:47:00"
 
 
 def test_local_summary_uses_device_date_and_keeps_zero_power():
@@ -161,7 +170,12 @@ def test_local_summary_uses_device_date_and_keeps_zero_power():
     client.login()
     system = client.list_systems().items[0]
 
-    summary = client.get_summary(system.system_id)
+    original_utc_to_local = client._utc_to_local
+    client._utc_to_local = lambda dt: __import__('datetime').datetime(2026, 4, 8, 20, 0)
+    try:
+        summary = client.get_summary(system.system_id)
+    finally:
+        client._utc_to_local = original_utc_to_local
     assert summary.daily_energy_dc == 1234.0
     assert summary.last_power_dc == 0.0
     assert str(summary.updated_on) == '2026-04-08 19:42:00'
@@ -227,3 +241,55 @@ def test_local_vin_auto_detects_direct_volts_without_scaling():
     assert len(vin.rows) == 1
     assert vin.rows[0].values['1'] == 31.0
     assert vin.rows[0].values['2'] == 30.0
+
+
+def test_local_summary_uses_fresher_today_when_summary_jsconfig_date_is_stale():
+    session = FakeSession()
+
+    original_get = session.get
+    def custom_get(url, **kwargs):
+        params = kwargs.get('params') or {}
+        if url.endswith('/cgi-bin/summary_jsconfig'):
+            return FakeResponse(json_data={'sDate': '2026-04-08'})
+        if url.endswith('/cgi-bin/summary_energy'):
+            return FakeResponse(json_data=[['2026-04-08', 1234], ['2026-04-09', 1600]])
+        if url.endswith('/cgi-bin/summary_data'):
+            req_date = params.get('date')
+            temp = params.get('temp')
+            if req_date == '2026-04-08' and temp in (None, 'pin'):
+                return FakeResponse(json_data={
+                    'lastData': '2026-04-08 23:59:59.000',
+                    'dataset': [
+                        {'order': ['A1', 'A2'], 'data': [{'t': '20:43', 'd': [0, 0]}]},
+                    ],
+                })
+            if req_date == '2026-04-09' and temp in (None, 'pin'):
+                return FakeResponse(json_data={
+                    'lastData': '2026-04-09 07:43:00.000',
+                    'dataset': [
+                        {'order': ['A1', 'A2'], 'data': [{'t': '07:43', 'd': [80, 70]}]},
+                    ],
+                })
+        return original_get(url, **kwargs)
+
+    session.get = custom_get
+    client = TigoCCAClient(
+        host='192.168.1.100',
+        username='Tigo',
+        password='$olar',
+        session=session,
+        enable_raw_temp_variants=True,
+    )
+    client.login()
+    system = client.list_systems().items[0]
+
+    original_utc_to_local = client._utc_to_local
+    client._utc_to_local = lambda dt: __import__('datetime').datetime(2026, 4, 9, 7, 45)
+    try:
+        summary = client.get_summary(system.system_id)
+    finally:
+        client._utc_to_local = original_utc_to_local
+
+    assert summary.daily_energy_dc == 1600.0
+    assert summary.last_power_dc == 150.0
+    assert str(summary.updated_on) == '2026-04-09 07:43:00'
