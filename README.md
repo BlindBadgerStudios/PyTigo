@@ -158,6 +158,8 @@ Derived variant exposed by the library:
 
 For local `Vin`, the library auto-detects whether the CCA payload is already in volts (e.g. `30-31`) or in tenths of a volt (e.g. `300-310`) and scales accordingly.
 
+For local summary/source freshness, the library now prefers the device-reported date from `/cgi-bin/summary_jsconfig` (`sDate`) instead of assuming the current UTC-derived day. This avoids a verified failure mode where the CCA still serves valid telemetry for the prior device day while naive `utcnow()`-based lookup lands on the wrong date. Local summary power also preserves legitimate `0.0 W` values from the latest populated sample instead of dropping the metric entirely after sunset.
+
 Accepted but not distinct on the tested device:
 - `tmod`
 - `tcell`

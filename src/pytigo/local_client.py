@@ -91,6 +91,7 @@ class TigoCCAClient:
         self._panel_object_ids: dict[str, int] = {}   # label → synthetic object_id
         self._object_id_to_label: dict[int, str] = {}  # synthetic object_id → label
         self._config_nodes: list[dict[str, Any]] = []
+        self._last_device_date: date | None = None
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -109,6 +110,41 @@ class TigoCCAClient:
 
     def _utc_to_local(self, dt: datetime) -> datetime:
         return dt + timedelta(seconds=self.tz_offset_seconds)
+
+    def _parse_device_date(self, value: Any) -> date | None:
+        if not value:
+            return None
+        if isinstance(value, date) and not isinstance(value, datetime):
+            return value
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, str):
+            try:
+                return date.fromisoformat(value)
+            except ValueError:
+                return None
+        return None
+
+    def _get_device_local_date(self, *, refresh: bool = True) -> date:
+        if refresh:
+            data = self._get("/cgi-bin/summary_jsconfig")
+            parsed = self._parse_device_date(data.get("sDate"))
+            if parsed is not None:
+                self._last_device_date = parsed
+                return parsed
+        if self._last_device_date is not None:
+            return self._last_device_date
+        return self._utc_to_local(datetime.utcnow()).date()
+
+    def _latest_populated_row(
+        self,
+        rows: list[tuple[datetime, dict[str, float | None]]],
+    ) -> tuple[datetime, dict[str, float | None]] | None:
+        for local_ts, values_by_label in reversed(rows):
+            numeric = [v for v in values_by_label.values() if isinstance(v, (int, float)) and v >= 0]
+            if numeric:
+                return local_ts, values_by_label
+        return None
 
     def _build_topology(self) -> None:
         """
@@ -198,6 +234,7 @@ class TigoCCAClient:
         """Probe the CCA and build the topology cache."""
         logger.debug("CCA login: probing %s", self.host)
         data = self._get("/cgi-bin/summary_jsconfig")
+        self._last_device_date = self._parse_device_date(data.get("sDate"))
         logger.debug("CCA date: %s", data.get("sDate"))
         self._build_topology()
         return TigoAuth(
@@ -317,8 +354,8 @@ class TigoCCAClient:
         self._ensure_topology()
         last_checkin: datetime | None = None
         try:
-            local_today = self._utc_to_local(datetime.utcnow()).date()
-            data = self._get("/cgi-bin/summary_data", params={"date": local_today.strftime("%Y-%m-%d")})
+            device_date = self._get_device_local_date()
+            data = self._get("/cgi-bin/summary_data", params={"date": device_date.strftime("%Y-%m-%d")})
             raw_ts = data.get("lastData")
             if raw_ts:
                 local_dt = _parse_cca_datetime(raw_ts)
@@ -356,14 +393,14 @@ class TigoCCAClient:
         ]
 
     def get_summary(self, system_id: int) -> TigoSummary:
-        local_today = self._utc_to_local(datetime.utcnow()).date()
+        device_date = self._get_device_local_date()
         daily_energy: float | None = None
         last_power: float | None = None
         updated_on: datetime | None = None
 
         try:
             energy_rows = self._get("/cgi-bin/summary_energy")
-            today_str = local_today.strftime("%Y-%m-%d")
+            today_str = device_date.strftime("%Y-%m-%d")
             for entry in energy_rows:
                 if entry[0] == today_str:
                     daily_energy = float(entry[1])
@@ -372,17 +409,14 @@ class TigoCCAClient:
             logger.debug("Could not fetch summary_energy", exc_info=True)
 
         try:
-            data = self._get("/cgi-bin/summary_data", params={"date": local_today.strftime("%Y-%m-%d"), "temp": "pin"})
-            rows = self._parse_summary_data_rows(data, base_date=local_today, value_mode="power")
-            for local_ts, values_by_label in reversed(rows):
+            data = self._get("/cgi-bin/summary_data", params={"date": device_date.strftime("%Y-%m-%d"), "temp": "pin"})
+            rows = self._parse_summary_data_rows(data, base_date=device_date, value_mode="power")
+            latest_row = self._latest_populated_row(rows)
+            if latest_row is not None:
+                local_ts, values_by_label = latest_row
                 numeric = [v for v in values_by_label.values() if isinstance(v, (int, float)) and v >= 0]
-                if not numeric:
-                    continue
-                total = sum(numeric)
-                if total > 0:
-                    last_power = float(total)
-                    updated_on = self._local_to_utc(local_ts)
-                    break
+                last_power = float(sum(numeric))
+                updated_on = self._local_to_utc(local_ts)
             if updated_on is None:
                 raw_ts = data.get("lastData")
                 if raw_ts:

@@ -119,6 +119,54 @@ def test_local_summary_uses_latest_dataset_segment():
     assert str(summary.updated_on) == "2026-04-08 10:47:00"
 
 
+def test_local_sources_use_device_date_for_last_checkin():
+    client = build_client()
+    system = client.list_systems().items[0]
+    sources = client.get_sources(system.system_id)
+    assert len(sources) == 1
+    assert str(sources[0].last_checkin) == "2026-04-08 23:59:59"
+
+
+
+def test_local_summary_uses_device_date_and_keeps_zero_power():
+    session = FakeSession()
+
+    original_get = session.get
+    def custom_get(url, **kwargs):
+        params = kwargs.get('params') or {}
+        if url.endswith('/cgi-bin/summary_data'):
+            assert params.get('date') == '2026-04-08'
+            if params.get('temp') in (None, 'pin'):
+                return FakeResponse(json_data={
+                    'lastData': '2026-04-08 23:59:59.000',
+                    'dataset': [
+                        {
+                            'order': ['A1', 'A2'],
+                            'data': [
+                                {'t': '19:42', 'd': [0, 0]},
+                            ],
+                        }
+                    ],
+                })
+        return original_get(url, **kwargs)
+
+    session.get = custom_get
+    client = TigoCCAClient(
+        host='192.168.1.100',
+        username='Tigo',
+        password='$olar',
+        session=session,
+        enable_raw_temp_variants=True,
+    )
+    client.login()
+    system = client.list_systems().items[0]
+
+    summary = client.get_summary(system.system_id)
+    assert summary.daily_energy_dc == 1234.0
+    assert summary.last_power_dc == 0.0
+    assert str(summary.updated_on) == '2026-04-08 19:42:00'
+
+
 def test_local_aggregate_merges_all_datasets_and_derives_iin():
     client = build_client()
     system = client.list_systems().items[0]
