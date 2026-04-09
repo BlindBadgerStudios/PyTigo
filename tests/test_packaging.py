@@ -6,7 +6,7 @@ from pytigo import __version__
 
 
 def test_version_exported():
-    assert __version__ == "0.4.1"
+    assert __version__ == "0.4.3"
 
 
 def test_pyproject_has_official_api_positioning():
