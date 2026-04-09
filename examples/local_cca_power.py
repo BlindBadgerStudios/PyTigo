@@ -7,9 +7,10 @@ Usage:
 Optional env vars:
     TIGO_LOCAL_USERNAME          -- CCA username (default: Tigo)
     TIGO_LOCAL_PASSWORD          -- CCA password (default: $olar)
-    TIGO_LOCAL_TZ_OFFSET_SECONDS -- CCA local clock offset from UTC in seconds
-                                    e.g. -18000 for UTC-5 (EST), 3600 for UTC+1
-                                    (default: 0, treats CCA clock as UTC)
+    TIGO_LOCAL_TIMEZONE          -- IANA timezone name like America/Los_Angeles
+    TIGO_LOCAL_UTC_OFFSET        -- offset string like -07:00
+    TIGO_LOCAL_TZ_OFFSET_SECONDS -- legacy raw offset in seconds
+                                    (used only when timezone/UTC offset are unset)
     TIGO_WINDOW_MIN              -- minutes of history to fetch (default: 15)
 """
 
@@ -55,6 +56,8 @@ def main() -> None:
 
     username = os.environ.get("TIGO_LOCAL_USERNAME", "Tigo")
     password = os.environ.get("TIGO_LOCAL_PASSWORD", "$olar")
+    timezone_name = os.environ.get("TIGO_LOCAL_TIMEZONE", "")
+    utc_offset = os.environ.get("TIGO_LOCAL_UTC_OFFSET", "")
     tz_offset = int(os.environ.get("TIGO_LOCAL_TZ_OFFSET_SECONDS", "0"))
     window_minutes = int(os.environ.get("TIGO_WINDOW_MIN", "15"))
 
@@ -62,6 +65,8 @@ def main() -> None:
         host=host,
         username=username,
         password=password,
+        timezone_name=timezone_name or None,
+        utc_offset=utc_offset or None,
         tz_offset_seconds=tz_offset,
     )
 

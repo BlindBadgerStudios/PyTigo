@@ -16,7 +16,7 @@ Two backends are provided, both satisfying `TigoClientProtocol`:
 | MPPT layer | Yes (from cloud layout) | **Synthesized — one per string** |
 | Alerts | Yes | **Not available (empty page)** |
 | Serial / panel type | Yes | **Not available** |
-| Timestamps | UTC-aware from cloud | Local device time; adjust with `tz_offset_seconds` |
+| Timestamps | UTC-aware from cloud | Local device time; adjust with `timezone_name`, `utc_offset`, or `tz_offset_seconds` |
 
 ## Install
 
@@ -61,13 +61,13 @@ alert_types = client.get_alert_types()
 ```python
 from pytigo import TigoCCAClient
 
-# tz_offset_seconds = local clock offset from UTC
-# e.g. UTC-5 (EST) = -18000, UTC+1 = 3600, UTC = 0
+# Recommended: use an IANA timezone name so DST is handled automatically.
+# You can also use utc_offset="-07:00" or the legacy tz_offset_seconds=-25200.
 client = TigoCCAClient(
     host="192.168.1.100",
     username="Tigo",
     password="$olar",
-    tz_offset_seconds=-18000,
+    timezone_name="America/Los_Angeles",
     # opt-in exploratory mode for raw temp variants like Iin/Tmod/Tcell/Tamb/Power
     enable_raw_temp_variants=False,
 )

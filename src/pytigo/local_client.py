@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta
+import re
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from requests import Session
 
@@ -52,10 +54,15 @@ class TigoCCAClient:
     - All CCA timestamps are local device time with no timezone information.
 
     Timezone handling:
-    tz_offset_seconds is the offset of the CCA's local clock from UTC, in seconds
+    You can configure local CCA time in any of three ways:
+    - timezone_name: IANA name like `America/Los_Angeles` (recommended)
+    - utc_offset: string like `-07:00`
+    - tz_offset_seconds: legacy raw integer offset in seconds
+
+    Precedence is: timezone_name > utc_offset > tz_offset_seconds.
+    The resolved offset describes the CCA's local clock relative to UTC
     (positive = local time is ahead of UTC, e.g. UTC+1 → 3600; negative for west
-    of UTC, e.g. UTC-5 → -18000).  Set this so that returned timestamps align with
-    the UTC expectations of consumers.  Defaults to 0 (CCA clock treated as UTC).
+    of UTC, e.g. UTC-5 → -18000).
 
     Raw temp variants:
     Some CCAs accept additional `temp=` values on `/cgi-bin/summary_data` such as
@@ -75,13 +82,18 @@ class TigoCCAClient:
         session: Session | None = None,
         timeout: int = 30,
         tz_offset_seconds: int = 0,
+        timezone_name: str | None = None,
+        utc_offset: str | None = None,
         enable_raw_temp_variants: bool = False,
     ) -> None:
         self.host = host.rstrip("/")
         self.username = username
         self.password = password
         self.timeout = timeout
-        self.tz_offset_seconds = tz_offset_seconds
+        self.timezone_name = timezone_name.strip() if isinstance(timezone_name, str) and timezone_name.strip() else None
+        self.utc_offset = utc_offset.strip() if isinstance(utc_offset, str) and utc_offset.strip() else None
+        self._timezone = self._load_timezone(self.timezone_name)
+        self.tz_offset_seconds = self._resolve_tz_offset_seconds(tz_offset_seconds, self.utc_offset, self._timezone)
         self.enable_raw_temp_variants = enable_raw_temp_variants
         self.session = session or Session()
         self.session.auth = (username, password)
@@ -105,10 +117,43 @@ class TigoCCAClient:
         response.raise_for_status()
         return response.json()
 
+    def _load_timezone(self, timezone_name: str | None) -> ZoneInfo | None:
+        if not timezone_name:
+            return None
+        try:
+            return ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError(f"Invalid timezone_name: {timezone_name!r}") from exc
+
+    def _parse_utc_offset(self, value: str | None) -> int | None:
+        if not value:
+            return None
+        match = re.fullmatch(r'([+-])(\d{2}):(\d{2})', value.strip())
+        if not match:
+            raise ValueError(f"Invalid utc_offset: {value!r}; expected ±HH:MM")
+        sign = 1 if match.group(1) == '+' else -1
+        hours = int(match.group(2))
+        minutes = int(match.group(3))
+        return sign * ((hours * 3600) + (minutes * 60))
+
+    def _resolve_tz_offset_seconds(self, tz_offset_seconds: int, utc_offset: str | None, timezone: ZoneInfo | None) -> int:
+        if timezone is not None:
+            offset = datetime.now(timezone).utcoffset()
+            return int(offset.total_seconds()) if offset is not None else 0
+        parsed_offset = self._parse_utc_offset(utc_offset)
+        if parsed_offset is not None:
+            return parsed_offset
+        return tz_offset_seconds
+
     def _local_to_utc(self, dt: datetime) -> datetime:
+        if self._timezone is not None:
+            return dt.replace(tzinfo=self._timezone).astimezone(UTC).replace(tzinfo=None)
         return dt - timedelta(seconds=self.tz_offset_seconds)
 
     def _utc_to_local(self, dt: datetime) -> datetime:
+        if self._timezone is not None:
+            base = dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
+            return base.astimezone(self._timezone).replace(tzinfo=None)
         return dt + timedelta(seconds=self.tz_offset_seconds)
 
     def _parse_device_date(self, value: Any) -> date | None:

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pytigo.local_client import TigoCCAClient
 
 
@@ -108,6 +110,30 @@ def build_client() -> TigoCCAClient:
     )
     client.login()
     return client
+
+
+def test_local_client_accepts_utc_offset_string():
+    client = TigoCCAClient(
+        host='192.168.1.100',
+        username='Tigo',
+        password='$olar',
+        session=FakeSession(),
+        utc_offset='-07:00',
+    )
+    assert client.tz_offset_seconds == -25200
+    assert client._local_to_utc(datetime(2026, 4, 9, 8, 0)) == datetime(2026, 4, 9, 15, 0)
+
+
+def test_local_client_accepts_timezone_name():
+    client = TigoCCAClient(
+        host='192.168.1.100',
+        username='Tigo',
+        password='$olar',
+        session=FakeSession(),
+        timezone_name='America/Phoenix',
+    )
+    assert client.tz_offset_seconds == -25200
+    assert client._local_to_utc(datetime(2026, 4, 9, 8, 0)) == datetime(2026, 4, 9, 15, 0)
 
 
 def test_local_summary_uses_latest_dataset_segment():
