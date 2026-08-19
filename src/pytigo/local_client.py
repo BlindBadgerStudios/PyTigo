@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+import requests
 from requests import Session
 
 from .models import (
@@ -113,9 +114,22 @@ class TigoCCAClient:
         return f"http://{self.host}{path}"
 
     def _get(self, path: str, params: dict[str, str] | None = None) -> Any:
-        response = self.session.get(self._url(path), params=params, timeout=self.timeout)
+        response = self.session.get(self._url(path), params=params, timeout=self.timeout, stream=True)
         response.raise_for_status()
-        return response.json()
+
+        # Some CCA firmware advertises an incorrect Content-Length on CGI
+        # responses.  When urllib3 enforces the length, requests can raise
+        # ChunkedEncodingError while reading an otherwise parseable body.  Disable
+        # enforcement after HTTP status handling so auth/config errors still
+        # surface as HTTP errors instead of misleading incomplete-read failures.
+        raw_response = getattr(response, "raw", None)
+        if raw_response is not None and hasattr(raw_response, "enforce_content_length"):
+            raw_response.enforce_content_length = False
+
+        try:
+            return response.json()
+        except requests.exceptions.ChunkedEncodingError as exc:
+            raise RuntimeError(f"Incomplete HTTP response from local Tigo CCA endpoint {path!r}") from exc
 
     def _load_timezone(self, timezone_name: str | None) -> ZoneInfo | None:
         if not timezone_name:

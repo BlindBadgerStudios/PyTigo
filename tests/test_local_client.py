@@ -3,12 +3,20 @@ from datetime import datetime
 from pytigo.local_client import TigoCCAClient
 
 
+class FakeRaw:
+    def __init__(self):
+        self.enforce_content_length = True
+
+
 class FakeResponse:
     def __init__(self, *, json_data=None, status_code=200):
         self._json = json_data
         self.status_code = status_code
+        self.raw = FakeRaw()
+        self.json_called = False
 
     def json(self):
+        self.json_called = True
         return self._json
 
     def raise_for_status(self):
@@ -110,6 +118,37 @@ def build_client() -> TigoCCAClient:
     )
     client.login()
     return client
+
+
+def test_local_client_get_streams_and_disables_content_length_enforcement():
+    session = FakeSession()
+    client = TigoCCAClient(host='192.168.1.100', username='Tigo', password='$olar', session=session)
+
+    payload = client._get('/cgi-bin/summary_jsconfig')
+
+    assert payload == {'sDate': '2026-04-08'}
+    _, kwargs = session.calls[-1]
+    assert kwargs['stream'] is True
+
+
+def test_local_client_get_raises_status_before_reading_malformed_error_body():
+    response = FakeResponse(json_data={'should_not': 'read'}, status_code=401)
+
+    class UnauthorizedSession:
+        auth = None
+
+        def get(self, url, **kwargs):
+            return response
+
+    client = TigoCCAClient(host='192.168.1.100', username='Tigo', password='wrong', session=UnauthorizedSession())
+
+    try:
+        client._get('/cgi-bin/summary_jsconfig')
+    except RuntimeError as exc:
+        assert 'HTTP 401' in str(exc)
+    else:
+        raise AssertionError('expected HTTP status error')
+    assert response.json_called is False
 
 
 def test_local_client_accepts_utc_offset_string():
