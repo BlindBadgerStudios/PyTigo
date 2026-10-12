@@ -193,3 +193,12 @@ The library returns typed Python dataclasses for JSON endpoints and a parsed `Ti
 
 For local CCA use, `lifetime_energy_dc` and `ytd_energy_dc` on `TigoSummary` will always be `None` — this data is not exposed by the device.  Consumers should handle `None` gracefully for these fields when operating in local mode.
 
+
+## Secret scanning
+
+This repo uses a [gitleaks](https://github.com/gitleaks/gitleaks) pre-commit hook. After cloning, run:
+
+```sh
+pip install pre-commit  # or: uv tool install pre-commit
+pre-commit install
+```

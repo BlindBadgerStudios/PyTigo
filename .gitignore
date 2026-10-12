@@ -12,3 +12,9 @@ build/
 *.egg-info/
 .env
 .env.*
+
+# Secrets (secret-hygiene)
+*.env
+secrets/
+*.pem
+*.key
