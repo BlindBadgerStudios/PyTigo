@@ -107,10 +107,12 @@ Use `TigoClientProtocol` as the type hint so your code works with either client:
 ```python
 from pytigo import TigoClient, TigoCCAClient, TigoClientProtocol
 
+
 def build_client(mode: str, **kwargs) -> TigoClientProtocol:
     if mode == "local":
         return TigoCCAClient(**kwargs)
     return TigoClient(**kwargs)
+
 
 def fetch_summary(client: TigoClientProtocol, system_id: int):
     client.login()

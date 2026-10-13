@@ -35,7 +35,11 @@ def _retry_cloud_call(label: str, fn, retries: int = 4, base_sleep: int = 5):
             return fn(), None, attempt
         except requests.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else None
-            body = exc.response.text[:300] if exc.response is not None and exc.response.text else ""
+            body = (
+                exc.response.text[:300]
+                if exc.response is not None and exc.response.text
+                else ""
+            )
             if status == 429 and attempt < retries:
                 time.sleep(base_sleep * attempt)
                 continue
@@ -61,7 +65,9 @@ def main() -> None:
     print("=========================")
 
     auth = client.login()
-    print(f"login: {_format_ok(True)}  user_id={auth.user_id} user_type={auth.user_type} expires={auth.expires}")
+    print(
+        f"login: {_format_ok(True)}  user_id={auth.user_id} user_type={auth.user_type} expires={auth.expires}"
+    )
 
     page = client.list_systems()
     if not page.items:
@@ -69,10 +75,14 @@ def main() -> None:
         sys.exit(1)
     system = client.get_system(int(system_id_env)) if system_id_env else page.items[0]
     system_id = system.system_id
-    print(f"list_systems: {_format_ok(True)}  count={len(page.items)} selected_system={system_id} name={system.name!r}")
+    print(
+        f"list_systems: {_format_ok(True)}  count={len(page.items)} selected_system={system_id} name={system.name!r}"
+    )
 
     system_detail = client.get_system(system_id)
-    print(f"get_system: {_format_ok(True)}  timezone={system_detail.timezone} status={system_detail.status}")
+    print(
+        f"get_system: {_format_ok(True)}  timezone={system_detail.timezone} status={system_detail.status}"
+    )
 
     layout = client.get_layout(system_id)
     panel_object_ids: list[int] = []
@@ -84,7 +94,9 @@ def main() -> None:
                     panel_count += 1
                     if panel.object_id is not None:
                         panel_object_ids.append(panel.object_id)
-    print(f"get_layout: {_format_ok(True)}  inverters={len(layout.inverters)} panels={panel_count} panels_with_object_ids={len(panel_object_ids)}")
+    print(
+        f"get_layout: {_format_ok(True)}  inverters={len(layout.inverters)} panels={panel_count} panels_with_object_ids={len(panel_object_ids)}"
+    )
 
     objects = client.get_objects(system_id)
     print(f"get_objects: {_format_ok(True)}  count={len(objects)}")
@@ -93,7 +105,11 @@ def main() -> None:
     first_source = sources[0] if sources else None
     print(
         f"get_sources: {_format_ok(True)}  count={len(sources)}"
-        + (f" first_last_checkin={first_source.last_checkin} panel_count={first_source.panel_count}" if first_source else "")
+        + (
+            f" first_last_checkin={first_source.last_checkin} panel_count={first_source.panel_count}"
+            if first_source
+            else ""
+        )
     )
 
     summary = client.get_summary(system_id)
@@ -103,7 +119,9 @@ def main() -> None:
     )
 
     alerts = client.get_alerts(system_id, limit=5)
-    print(f"get_alerts: {_format_ok(True)}  items={len(alerts.items)} total={alerts.total}")
+    print(
+        f"get_alerts: {_format_ok(True)}  items={len(alerts.items)} total={alerts.total}"
+    )
 
     alert_types = client.get_alert_types()
     print(f"get_alert_types: {_format_ok(True)}  count={len(alert_types)}")
@@ -135,7 +153,9 @@ def main() -> None:
             f"get_aggregate: {_format_ok(True)}  attempts={agg_attempt} rows={len(agg.rows)} headers={agg.headers[:10]}"
         )
         if limited:
-            print("  NOTE: aggregate returned only 'Datetime' with no value columns. This is a known live limitation on some systems/accounts.")
+            print(
+                "  NOTE: aggregate returned only 'Datetime' with no value columns. This is a known live limitation on some systems/accounts."
+            )
         else:
             print(f"  value_headers={value_headers[:10]}")
 
@@ -158,7 +178,9 @@ def main() -> None:
             f"get_combined: {_format_ok(True)}  attempts={comb_attempt} rows={len(comb.rows)} headers={comb.headers[:10]}"
         )
         if limited:
-            print("  NOTE: combined returned only 'Datetime' with no value columns. This is a known live limitation on some systems/accounts.")
+            print(
+                "  NOTE: combined returned only 'Datetime' with no value columns. This is a known live limitation on some systems/accounts."
+            )
         else:
             print(f"  value_headers={value_headers[:10]}")
 
