@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any, Generic, TypeVar, Literal
+from typing import Any, Generic, Literal, TypeVar
 
 T = TypeVar("T")
 
@@ -246,4 +245,6 @@ CLOUD_AGGREGATE_LEVELS: frozenset[str] = frozenset({"minute", "min", "day"})
 #: Params accepted by the cloud ``data/aggregate`` endpoint (verified 2026-10-12).
 #: Temperature names (Temp, Tmod, Tcell, Tamb, ...) are rejected with HTTP 400.
 CloudAggregateParam = Literal["Pin", "Vin", "Iin", "RSSI", "Inv_AC", "Inverter_AC"]
-CLOUD_AGGREGATE_PARAMS: frozenset[str] = frozenset({"Pin", "Vin", "Iin", "RSSI", "Inv_AC", "Inverter_AC"})
+CLOUD_AGGREGATE_PARAMS: frozenset[str] = frozenset(
+    {"Pin", "Vin", "Iin", "RSSI", "Inv_AC", "Inverter_AC"}
+)

@@ -126,11 +126,18 @@ def _parse_system(data: dict[str, Any]) -> TigoSystem:
     )
 
 
-def _extract_page_meta(payload: dict[str, Any]) -> tuple[int | None, int | None, int | None, dict[str, str]]:
+def _extract_page_meta(
+    payload: dict[str, Any],
+) -> tuple[int | None, int | None, int | None, dict[str, str]]:
     meta = payload.get("_meta") or {}
     links_raw = payload.get("_links") or {}
     links = {k: v for k, v in links_raw.items() if isinstance(v, str)}
-    return _to_int(meta.get("total")), _to_int(meta.get("page")), _to_int(meta.get("limit")), links
+    return (
+        _to_int(meta.get("total")),
+        _to_int(meta.get("page")),
+        _to_int(meta.get("limit")),
+        links,
+    )
 
 
 def parse_systems_response(payload: dict[str, Any]) -> TigoPage[TigoSystem]:
@@ -153,7 +160,9 @@ def _parse_panel(panel: dict[str, Any]) -> TigoPanelLayout:
     return TigoPanelLayout(
         panel_id=int(panel["panel_id"]),
         label=panel.get("label"),
-        short_label=str(panel.get("short_label")) if panel.get("short_label") is not None else None,
+        short_label=str(panel.get("short_label"))
+        if panel.get("short_label") is not None
+        else None,
         serial=panel.get("serial"),
         panel_type=panel.get("type"),
         source_id=_to_int(panel.get("source_id")),
@@ -167,7 +176,9 @@ def _parse_string(string: dict[str, Any]) -> TigoStringLayout:
     return TigoStringLayout(
         string_id=int(string["string_id"]),
         label=string.get("label"),
-        short_label=str(string.get("short_label")) if string.get("short_label") is not None else None,
+        short_label=str(string.get("short_label"))
+        if string.get("short_label") is not None
+        else None,
         object_id=_to_int(string.get("object_id")),
         panels=[_parse_panel(panel) for panel in string.get("panels", [])],
         raw=string,
@@ -314,7 +325,9 @@ def parse_alerts_response(payload: dict[str, Any]) -> TigoPage[TigoAlert]:
         )
         for item in payload.get("alerts", [])
     ]
-    return TigoPage(items=items, total=total, page=page, limit=limit, links=links, raw=payload)
+    return TigoPage(
+        items=items, total=total, page=page, limit=limit, links=links, raw=payload
+    )
 
 
 def parse_alert_types_response(payload: dict[str, Any]) -> list[TigoAlertType]:
