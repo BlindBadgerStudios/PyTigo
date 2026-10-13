@@ -110,9 +110,9 @@ class FakeSession:
 def build_client() -> TigoCCAClient:
     session = FakeSession()
     client = TigoCCAClient(
-        host="192.168.1.100",
+        host="192.168.1.50",
         username="Tigo",
-        password="$olar",
+        password="test-pass",
         session=session,
         enable_raw_temp_variants=True,
     )
@@ -122,7 +122,7 @@ def build_client() -> TigoCCAClient:
 
 def test_local_client_get_streams_and_disables_content_length_enforcement():
     session = FakeSession()
-    client = TigoCCAClient(host='192.168.1.100', username='Tigo', password='$olar', session=session)
+    client = TigoCCAClient(host='192.168.1.50', username='Tigo', password='test-pass', session=session)
 
     payload = client._get('/cgi-bin/summary_jsconfig')
 
@@ -140,7 +140,7 @@ def test_local_client_get_raises_status_before_reading_malformed_error_body():
         def get(self, url, **kwargs):
             return response
 
-    client = TigoCCAClient(host='192.168.1.100', username='Tigo', password='wrong', session=UnauthorizedSession())
+    client = TigoCCAClient(host='192.168.1.50', username='Tigo', password='wrong', session=UnauthorizedSession())
 
     try:
         client._get('/cgi-bin/summary_jsconfig')
@@ -153,9 +153,9 @@ def test_local_client_get_raises_status_before_reading_malformed_error_body():
 
 def test_local_client_accepts_utc_offset_string():
     client = TigoCCAClient(
-        host='192.168.1.100',
+        host='192.168.1.50',
         username='Tigo',
-        password='$olar',
+        password='test-pass',
         session=FakeSession(),
         utc_offset='-07:00',
     )
@@ -165,9 +165,9 @@ def test_local_client_accepts_utc_offset_string():
 
 def test_local_client_accepts_timezone_name():
     client = TigoCCAClient(
-        host='192.168.1.100',
+        host='192.168.1.50',
         username='Tigo',
-        password='$olar',
+        password='test-pass',
         session=FakeSession(),
         timezone_name='America/Phoenix',
     )
@@ -226,9 +226,9 @@ def test_local_summary_uses_device_date_and_keeps_zero_power():
 
     session.get = custom_get
     client = TigoCCAClient(
-        host='192.168.1.100',
+        host='192.168.1.50',
         username='Tigo',
-        password='$olar',
+        password='test-pass',
         session=session,
         enable_raw_temp_variants=True,
     )
@@ -293,9 +293,9 @@ def test_local_vin_auto_detects_direct_volts_without_scaling():
 
     session.get = custom_get
     client = TigoCCAClient(
-        host='192.168.1.100',
+        host='192.168.1.50',
         username='Tigo',
-        password='$olar',
+        password='test-pass',
         session=session,
         enable_raw_temp_variants=True,
     )
@@ -339,9 +339,9 @@ def test_local_summary_uses_fresher_today_when_summary_jsconfig_date_is_stale():
 
     session.get = custom_get
     client = TigoCCAClient(
-        host='192.168.1.100',
+        host='192.168.1.50',
         username='Tigo',
-        password='$olar',
+        password='test-pass',
         session=session,
         enable_raw_temp_variants=True,
     )
