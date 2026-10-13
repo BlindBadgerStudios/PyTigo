@@ -2,7 +2,7 @@
 
 All notable changes to PyTigo are documented here. Versions follow the git tags (`vX.Y.Z`).
 
-## 0.4.5 (unreleased)
+## 0.4.5 (2026-10-13)
 
 ### Fixed
 - Local CCA: better HTTP error handling (`17ff6f2`, 2026-08-19). Responses are streamed and
