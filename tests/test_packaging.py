@@ -6,7 +6,12 @@ from pytigo import __version__
 
 
 def test_version_exported():
-    assert __version__ == "0.4.4"
+    assert __version__ == "0.4.5"
+
+
+def test_version_matches_pyproject():
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text())
+    assert pyproject["project"]["version"] == __version__
 
 
 def test_pyproject_has_official_api_positioning():
