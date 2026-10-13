@@ -9,7 +9,7 @@ Two backends are provided, both satisfying `TigoClientProtocol`:
 | Transport | HTTPS to `api2.tigoenergy.com` | HTTP to CCA device on LAN |
 | Auth | Bearer token (username + password login) | HTTP Basic Auth |
 | System ID | From cloud account | Read from device `summary_config` |
-| Telemetry params | Pin, Vin, Iin, RSSI, Temp, Tmod, Tcell, Tamb | **Pin, Vin, RSSI, derived Iin** |
+| Telemetry params | Pin, Vin, Iin, RSSI, Inv_AC, Inverter_AC (**no temperature**) | **Pin, Vin, RSSI, derived Iin** |
 | Lifetime energy | Yes | **Not available (returns `None`)** |
 | YTD energy | Yes | **Not available (returns `None`)** |
 | Daily energy | Yes | Yes (~12-day rolling window) |
@@ -125,6 +125,15 @@ def fetch_summary(client: TigoClientProtocol, system_id: int):
 - sources/system
 - data/summary, data/aggregate, data/combined
 - alerts/system, alerts/types
+
+### Cloud telemetry params and temperature
+
+Cloud API v3 `data/aggregate` only accepts `param` = `Pin`, `Vin`, `Iin`, `RSSI`, `Inv_AC`,
+`Inverter_AC`, and `level` accepts only minute and day granularity. Temperature params (`Temp`, `Tmod`, `Tcell`,
+`Tamb`, etc.) are rejected with HTTP 400 (`param must be one of the following values: ...`),
+and `objects/system` contains no temperature object (verified 2026-10-12 against a live
+system). Panel temperature is not available from the cloud API. Locally, see the temp
+variants section below: on the tested CCA the temperature-named variants mirrored `pin`.
 
 ## Local CCA status (verified against a live device)
 
