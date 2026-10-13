@@ -135,6 +135,15 @@ and `objects/system` contains no temperature object (verified 2026-10-12 against
 system). Panel temperature is not available from the cloud API. Locally, see the temp
 variants section below: on the tested CCA the temperature-named variants mirrored `pin`.
 
+`TigoClient` validates these client-side:
+
+- `level` (`get_aggregate`) and `agg` (`get_combined`) are typed as
+  `Literal["minute", "min", "day"]`. `"min"` is the short alias existing callers use and is
+  sent unchanged. Any other value (including `"hour"`) raises `ValueError` before a request is made.
+- `param` is checked against `pytigo.models.CLOUD_AGGREGATE_PARAMS`. By default an unknown param
+  logs a WARNING and is still sent (the API answers HTTP 400), so current callers keep working.
+  Pass `TigoClient(..., strict_params=True)` to raise `ValueError` instead.
+
 ## Local CCA status (verified against a live device)
 
 Verified with local credentials (username `Tigo`, password: the CCA's vendor default, see Tigo docs) on a CCA at `192.168.1.50`:

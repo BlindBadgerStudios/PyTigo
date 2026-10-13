@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, Literal
 
 T = TypeVar("T")
 
@@ -222,7 +224,7 @@ class TigoPage(Generic[T]):
 @dataclass
 class TigoCSVRow:
     timestamp: datetime | None
-    values: dict[str, float | str | None]
+    values: Mapping[str, float | str | None]
 
 
 @dataclass
@@ -230,3 +232,18 @@ class TigoCSVTable:
     headers: list[str]
     rows: list[TigoCSVRow]
     raw_text: str
+
+
+# --- Cloud API v3 value sets -------------------------------------------------
+
+#: Granularities accepted by the cloud ``data/aggregate`` (``level``) and
+#: ``data/combined`` (``agg``) endpoints. ``"min"`` is the short form that
+#: existing callers (e.g. Prom_Tigo) send and that the API accepts; ``"minute"``
+#: is the documented spelling. ``"hour"`` is rejected by the API with HTTP 400.
+AggregateLevel = Literal["minute", "min", "day"]
+CLOUD_AGGREGATE_LEVELS: frozenset[str] = frozenset({"minute", "min", "day"})
+
+#: Params accepted by the cloud ``data/aggregate`` endpoint (verified 2026-10-12).
+#: Temperature names (Temp, Tmod, Tcell, Tamb, ...) are rejected with HTTP 400.
+CloudAggregateParam = Literal["Pin", "Vin", "Iin", "RSSI", "Inv_AC", "Inverter_AC"]
+CLOUD_AGGREGATE_PARAMS: frozenset[str] = frozenset({"Pin", "Vin", "Iin", "RSSI", "Inv_AC", "Inverter_AC"})

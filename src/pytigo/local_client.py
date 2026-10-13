@@ -193,7 +193,7 @@ class TigoCCAClient:
                 return parsed
         if self._last_device_date is not None:
             return self._last_device_date
-        return self._utc_to_local(datetime.utcnow()).date()
+        return self._utc_to_local(datetime.now(UTC).replace(tzinfo=None)).date()
 
     def _latest_populated_row(
         self,
@@ -216,7 +216,7 @@ class TigoCCAClient:
 
         add(hinted_date)
         add(self._last_device_date)
-        add(self._utc_to_local(datetime.utcnow()).date())
+        add(self._utc_to_local(datetime.now(UTC).replace(tzinfo=None)).date())
         return candidates
 
     def _select_freshest_summary_day(self) -> tuple[date, dict[str, Any], tuple[datetime, dict[str, float | None]] | None]:
@@ -545,7 +545,7 @@ class TigoCCAClient:
         *,
         start: str,
         end: str,
-        level: Literal["min", "hour", "day"] = "min",
+        level: Literal["minute", "min", "hour", "day"] = "min",
         param: str = "Pin",
         object_ids: list[int] | None = None,
         header: str | None = None,
@@ -601,6 +601,7 @@ class TigoCCAClient:
                     vin_rows = self._fetch_day_rows(query_date, "vin", "vin", local_start, local_end)
                     day_rows = self._derive_current_rows(pin_rows, vin_rows)
                 else:
+                    assert temp_name is not None  # only derived_iin has no source table
                     day_rows = self._fetch_day_rows(query_date, temp_name, value_mode, local_start, local_end)
                 all_rows.extend(day_rows)
             except Exception:
@@ -737,9 +738,12 @@ def _parse_iso(value: str) -> datetime | None:
             continue
     try:
         dt = datetime.fromisoformat(value)
-        return dt.replace(tzinfo=None)  # strip tzinfo; treat as naive
     except ValueError:
         return None
+    if dt.tzinfo is not None:
+        # Convert aware inputs to naive UTC instead of just dropping the offset.
+        dt = dt.astimezone(UTC).replace(tzinfo=None)
+    return dt
 
 
 def _parse_cca_datetime(value: str) -> datetime | None:
