@@ -6,7 +6,7 @@ Usage:
 
 Optional env vars:
     TIGO_LOCAL_USERNAME -- CCA username (default: Tigo)
-    TIGO_LOCAL_PASSWORD -- CCA password (default: $olar)
+    TIGO_LOCAL_PASSWORD -- CCA password (default: the CCA vendor default; set explicitly)
     TIGO_LOCAL_DATE     -- date for summary_data/temp probes (default: device date if available, else today UTC)
 """
 

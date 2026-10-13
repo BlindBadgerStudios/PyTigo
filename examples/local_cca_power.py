@@ -6,7 +6,7 @@ Usage:
 
 Optional env vars:
     TIGO_LOCAL_USERNAME          -- CCA username (default: Tigo)
-    TIGO_LOCAL_PASSWORD          -- CCA password (default: $olar)
+    TIGO_LOCAL_PASSWORD          -- CCA password (default: the CCA vendor default; set explicitly)
     TIGO_LOCAL_TIMEZONE          -- IANA timezone name like America/Los_Angeles
     TIGO_LOCAL_UTC_OFFSET        -- offset string like -07:00
     TIGO_LOCAL_TZ_OFFSET_SECONDS -- legacy raw offset in seconds

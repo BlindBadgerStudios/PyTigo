@@ -66,7 +66,7 @@ from pytigo import TigoCCAClient
 client = TigoCCAClient(
     host="192.168.1.100",
     username="Tigo",
-    password="$olar",
+    password="<cca-password>",
     timezone_name="America/Los_Angeles",
     # opt-in exploratory mode for raw temp variants like Iin/Tmod/Tcell/Tamb/Power
     enable_raw_temp_variants=False,
@@ -137,7 +137,7 @@ variants section below: on the tested CCA the temperature-named variants mirrore
 
 ## Local CCA status (verified against a live device)
 
-Verified with local credentials `Tigo` / `$olar` on a CCA at `192.168.192.114`:
+Verified with local credentials (username `Tigo`, password: the CCA's vendor default, see Tigo docs) on a CCA at `192.168.1.50`:
 
 Available local data endpoints:
 - `/cgi-bin/summary_jsconfig`
