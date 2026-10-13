@@ -2,12 +2,11 @@ import logging
 from datetime import datetime
 
 import pytest
+from test_api_client import TEST_SYSTEM_ID, FakeSession
 
 from pytigo.client import TigoClient
 from pytigo.local_client import _parse_iso
 from pytigo.models import CLOUD_AGGREGATE_PARAMS
-
-from test_api_client import TEST_SYSTEM_ID, FakeSession
 
 
 def _client(**kwargs):
@@ -20,7 +19,12 @@ def _client(**kwargs):
 @pytest.mark.parametrize("level", ["minute", "min", "day"])
 def test_aggregate_accepts_supported_levels_and_sends_them_verbatim(level):
     client, session = _client()
-    client.get_aggregate(TEST_SYSTEM_ID, start="2026-03-31T00:00:00", end="2026-03-31T01:00:00", level=level)
+    client.get_aggregate(
+        TEST_SYSTEM_ID,
+        start="2026-03-31T00:00:00",
+        end="2026-03-31T01:00:00",
+        level=level,
+    )
     assert session.calls[-1][1]["params"]["level"] == level
 
 

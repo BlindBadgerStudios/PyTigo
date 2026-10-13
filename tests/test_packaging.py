@@ -1,6 +1,5 @@
-from pathlib import Path
-
 import tomllib
+from pathlib import Path
 
 from pytigo import __version__
 
@@ -19,7 +18,7 @@ def test_pyproject_has_official_api_positioning():
     project = pyproject["project"]
     assert project["name"] == "pytigo"
     assert project["license"] == "MIT"
-    assert "authors" in project and project["authors"]
+    assert project.get("authors")
     assert any(dep.startswith("requests") for dep in project["dependencies"])
     assert "build" in project["optional-dependencies"]["dev"]
     assert "twine" in project["optional-dependencies"]["dev"]
