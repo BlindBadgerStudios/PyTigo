@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date
 
 from pytigo.models import TigoPage
 from pytigo.parsing import (
@@ -226,7 +226,9 @@ ALERTS_PAGINATED_JSON = {
     "_links": {},
 }
 
-CSV_TEXT = "Datetime,1,2\n2026/03/31 00:00:00,2078.8,2069.77\n2026/03/31 00:01:00,,2060\n"
+CSV_TEXT = (
+    "Datetime,1,2\n2026/03/31 00:00:00,2078.8,2069.77\n2026/03/31 00:01:00,,2060\n"
+)
 
 
 def test_parse_login_and_user():

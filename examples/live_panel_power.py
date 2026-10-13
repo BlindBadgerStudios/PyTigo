@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-UTC = timezone.utc
+UTC = UTC
 
 from pytigo import TigoClient
 
@@ -76,13 +76,15 @@ def main() -> None:
             for string in mppt.strings:
                 for panel in string.panels:
                     if panel.object_id is not None:
-                        panels.append({
-                            "object_id": int(panel.object_id),
-                            "label": panel.label or f"panel_{panel.panel_id}",
-                            "serial": panel.serial or "",
-                            "inverter": inverter.label or str(inverter.inverter_id),
-                            "string": string.label or str(string.string_id),
-                        })
+                        panels.append(
+                            {
+                                "object_id": int(panel.object_id),
+                                "label": panel.label or f"panel_{panel.panel_id}",
+                                "serial": panel.serial or "",
+                                "inverter": inverter.label or str(inverter.inverter_id),
+                                "string": string.label or str(string.string_id),
+                            }
+                        )
 
     if not panels:
         print("No panels found in layout (object_id not set). Cannot fetch telemetry.")
@@ -97,7 +99,9 @@ def main() -> None:
     end_str = end.strftime("%Y-%m-%dT%H:%M:%S")
     object_ids = [p["object_id"] for p in panels]
 
-    print(f"\nFetching Pin telemetry ({window_minutes}-min window: {start_str} → {end_str})...")
+    print(
+        f"\nFetching Pin telemetry ({window_minutes}-min window: {start_str} → {end_str})..."
+    )
     table = client.get_aggregate(
         system_id,
         start=start_str,
@@ -127,7 +131,9 @@ def main() -> None:
 
     panels_by_oid = {p["object_id"]: p for p in panels}
 
-    print(f"\n--- Per-Panel Power (most recent sample in last {window_minutes} min) ---")
+    print(
+        f"\n--- Per-Panel Power (most recent sample in last {window_minutes} min) ---"
+    )
     header = f"{'Label':<12} {'Serial':<14} {'Inverter':<14} {'String':<12} {'Power (W)':>10}  {'Timestamp'}"
     print(header)
     print("-" * len(header))
@@ -140,7 +146,9 @@ def main() -> None:
             ts, power = latest[oid]
             total_power += power
             ts_str = ts.strftime("%H:%M:%S") if ts else "?"
-            print(f"  {panel['label']:<10} {panel['serial']:<14} {panel['inverter']:<14} {panel['string']:<12} {power:>10.1f}  {ts_str}")
+            print(
+                f"  {panel['label']:<10} {panel['serial']:<14} {panel['inverter']:<14} {panel['string']:<12} {power:>10.1f}  {ts_str}"
+            )
         else:
             missing.append(panel["label"])
 

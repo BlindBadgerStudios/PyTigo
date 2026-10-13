@@ -60,7 +60,7 @@ class TigoClientProtocol(Protocol):
         *,
         start: str,
         end: str,
-        level: Literal["min", "hour", "day"] = "min",
+        level: Literal["minute", "min", "day"] = "min",
         param: str = "Pin",
         object_ids: list[int] | None = None,
         header: str | None = None,

@@ -9,7 +9,7 @@ Two backends are provided, both satisfying `TigoClientProtocol`:
 | Transport | HTTPS to `api2.tigoenergy.com` | HTTP to CCA device on LAN |
 | Auth | Bearer token (username + password login) | HTTP Basic Auth |
 | System ID | From cloud account | Read from device `summary_config` |
-| Telemetry params | Pin, Vin, Iin, RSSI, Temp, Tmod, Tcell, Tamb | **Pin, Vin, RSSI, derived Iin** |
+| Telemetry params | Pin, Vin, Iin, RSSI, Inv_AC, Inverter_AC (**no temperature**) | **Pin, Vin, RSSI, derived Iin** |
 | Lifetime energy | Yes | **Not available (returns `None`)** |
 | YTD energy | Yes | **Not available (returns `None`)** |
 | Daily energy | Yes | Yes (~12-day rolling window) |
@@ -66,7 +66,7 @@ from pytigo import TigoCCAClient
 client = TigoCCAClient(
     host="192.168.1.100",
     username="Tigo",
-    password="$olar",
+    password="<cca-password>",
     timezone_name="America/Los_Angeles",
     # opt-in exploratory mode for raw temp variants like Iin/Tmod/Tcell/Tamb/Power
     enable_raw_temp_variants=False,
@@ -107,10 +107,12 @@ Use `TigoClientProtocol` as the type hint so your code works with either client:
 ```python
 from pytigo import TigoClient, TigoCCAClient, TigoClientProtocol
 
+
 def build_client(mode: str, **kwargs) -> TigoClientProtocol:
     if mode == "local":
         return TigoCCAClient(**kwargs)
     return TigoClient(**kwargs)
+
 
 def fetch_summary(client: TigoClientProtocol, system_id: int):
     client.login()
@@ -126,9 +128,27 @@ def fetch_summary(client: TigoClientProtocol, system_id: int):
 - data/summary, data/aggregate, data/combined
 - alerts/system, alerts/types
 
+### Cloud telemetry params and temperature
+
+Cloud API v3 `data/aggregate` only accepts `param` = `Pin`, `Vin`, `Iin`, `RSSI`, `Inv_AC`,
+`Inverter_AC`, and `level` accepts only minute and day granularity. Temperature params (`Temp`, `Tmod`, `Tcell`,
+`Tamb`, etc.) are rejected with HTTP 400 (`param must be one of the following values: ...`),
+and `objects/system` contains no temperature object (verified 2026-10-12 against a live
+system). Panel temperature is not available from the cloud API. Locally, see the temp
+variants section below: on the tested CCA the temperature-named variants mirrored `pin`.
+
+`TigoClient` validates these client-side:
+
+- `level` (`get_aggregate`) and `agg` (`get_combined`) are typed as
+  `Literal["minute", "min", "day"]`. `"min"` is the short alias existing callers use and is
+  sent unchanged. Any other value (including `"hour"`) raises `ValueError` before a request is made.
+- `param` is checked against `pytigo.models.CLOUD_AGGREGATE_PARAMS`. By default an unknown param
+  logs a WARNING and is still sent (the API answers HTTP 400), so current callers keep working.
+  Pass `TigoClient(..., strict_params=True)` to raise `ValueError` instead.
+
 ## Local CCA status (verified against a live device)
 
-Verified with local credentials `Tigo` / `$olar` on a CCA at `192.168.192.114`:
+Verified with local credentials (username `Tigo`, password: the CCA's vendor default, see Tigo docs) on a CCA at `192.168.1.50`:
 
 Available local data endpoints:
 - `/cgi-bin/summary_jsconfig`
