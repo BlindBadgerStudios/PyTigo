@@ -18,8 +18,8 @@ from .models import (
     TigoMpptLayout,
     TigoObjectNode,
     TigoObjectUI,
-    TigoPanelLayout,
     TigoPage,
+    TigoPanelLayout,
     TigoSource,
     TigoSourceSet,
     TigoStringLayout,
@@ -91,17 +91,27 @@ class TigoCCAClient:
         self.username = username
         self.password = password
         self.timeout = timeout
-        self.timezone_name = timezone_name.strip() if isinstance(timezone_name, str) and timezone_name.strip() else None
-        self.utc_offset = utc_offset.strip() if isinstance(utc_offset, str) and utc_offset.strip() else None
+        self.timezone_name = (
+            timezone_name.strip()
+            if isinstance(timezone_name, str) and timezone_name.strip()
+            else None
+        )
+        self.utc_offset = (
+            utc_offset.strip()
+            if isinstance(utc_offset, str) and utc_offset.strip()
+            else None
+        )
         self._timezone = self._load_timezone(self.timezone_name)
-        self.tz_offset_seconds = self._resolve_tz_offset_seconds(tz_offset_seconds, self.utc_offset, self._timezone)
+        self.tz_offset_seconds = self._resolve_tz_offset_seconds(
+            tz_offset_seconds, self.utc_offset, self._timezone
+        )
         self.enable_raw_temp_variants = enable_raw_temp_variants
         self.session = session or Session()
         self.session.auth = (username, password)
         # populated by _build_topology(), called during login()
         self._system_id: int | None = None
         self._system_name: str | None = None
-        self._panel_object_ids: dict[str, int] = {}   # label → synthetic object_id
+        self._panel_object_ids: dict[str, int] = {}  # label → synthetic object_id
         self._object_id_to_label: dict[int, str] = {}  # synthetic object_id → label
         self._config_nodes: list[dict[str, Any]] = []
         self._last_device_date: date | None = None
@@ -114,7 +124,9 @@ class TigoCCAClient:
         return f"http://{self.host}{path}"
 
     def _get(self, path: str, params: dict[str, str] | None = None) -> Any:
-        response = self.session.get(self._url(path), params=params, timeout=self.timeout, stream=True)
+        response = self.session.get(
+            self._url(path), params=params, timeout=self.timeout, stream=True
+        )
         response.raise_for_status()
 
         # Some CCA firmware advertises an incorrect Content-Length on CGI
@@ -129,7 +141,9 @@ class TigoCCAClient:
         try:
             return response.json()
         except requests.exceptions.ChunkedEncodingError as exc:
-            raise RuntimeError(f"Incomplete HTTP response from local Tigo CCA endpoint {path!r}") from exc
+            raise RuntimeError(
+                f"Incomplete HTTP response from local Tigo CCA endpoint {path!r}"
+            ) from exc
 
     def _load_timezone(self, timezone_name: str | None) -> ZoneInfo | None:
         if not timezone_name:
@@ -142,15 +156,17 @@ class TigoCCAClient:
     def _parse_utc_offset(self, value: str | None) -> int | None:
         if not value:
             return None
-        match = re.fullmatch(r'([+-])(\d{2}):(\d{2})', value.strip())
+        match = re.fullmatch(r"([+-])(\d{2}):(\d{2})", value.strip())
         if not match:
             raise ValueError(f"Invalid utc_offset: {value!r}; expected ±HH:MM")
-        sign = 1 if match.group(1) == '+' else -1
+        sign = 1 if match.group(1) == "+" else -1
         hours = int(match.group(2))
         minutes = int(match.group(3))
         return sign * ((hours * 3600) + (minutes * 60))
 
-    def _resolve_tz_offset_seconds(self, tz_offset_seconds: int, utc_offset: str | None, timezone: ZoneInfo | None) -> int:
+    def _resolve_tz_offset_seconds(
+        self, tz_offset_seconds: int, utc_offset: str | None, timezone: ZoneInfo | None
+    ) -> int:
         if timezone is not None:
             offset = datetime.now(timezone).utcoffset()
             return int(offset.total_seconds()) if offset is not None else 0
@@ -161,7 +177,9 @@ class TigoCCAClient:
 
     def _local_to_utc(self, dt: datetime) -> datetime:
         if self._timezone is not None:
-            return dt.replace(tzinfo=self._timezone).astimezone(UTC).replace(tzinfo=None)
+            return (
+                dt.replace(tzinfo=self._timezone).astimezone(UTC).replace(tzinfo=None)
+            )
         return dt - timedelta(seconds=self.tz_offset_seconds)
 
     def _utc_to_local(self, dt: datetime) -> datetime:
@@ -200,7 +218,11 @@ class TigoCCAClient:
         rows: list[tuple[datetime, dict[str, float | None]]],
     ) -> tuple[datetime, dict[str, float | None]] | None:
         for local_ts, values_by_label in reversed(rows):
-            numeric = [v for v in values_by_label.values() if isinstance(v, (int, float)) and v >= 0]
+            numeric = [
+                v
+                for v in values_by_label.values()
+                if isinstance(v, (int, float)) and v >= 0
+            ]
             if numeric:
                 return local_ts, values_by_label
         return None
@@ -219,14 +241,23 @@ class TigoCCAClient:
         add(self._utc_to_local(datetime.now(UTC).replace(tzinfo=None)).date())
         return candidates
 
-    def _select_freshest_summary_day(self) -> tuple[date, dict[str, Any], tuple[datetime, dict[str, float | None]] | None]:
+    def _select_freshest_summary_day(
+        self,
+    ) -> tuple[date, dict[str, Any], tuple[datetime, dict[str, float | None]] | None]:
         best_date: date | None = None
         best_data: dict[str, Any] | None = None
         best_row: tuple[datetime, dict[str, float | None]] | None = None
 
-        for candidate_date in self._candidate_device_dates(self._get_device_local_date()):
-            data = self._get('/cgi-bin/summary_data', params={'date': candidate_date.strftime('%Y-%m-%d'), 'temp': 'pin'})
-            rows = self._parse_summary_data_rows(data, base_date=candidate_date, value_mode='power')
+        for candidate_date in self._candidate_device_dates(
+            self._get_device_local_date()
+        ):
+            data = self._get(
+                "/cgi-bin/summary_data",
+                params={"date": candidate_date.strftime("%Y-%m-%d"), "temp": "pin"},
+            )
+            rows = self._parse_summary_data_rows(
+                data, base_date=candidate_date, value_mode="power"
+            )
             latest_row = self._latest_populated_row(rows)
             if latest_row is None:
                 continue
@@ -240,8 +271,13 @@ class TigoCCAClient:
             return best_date, best_data, best_row
 
         fallback_date = self._get_device_local_date(refresh=False)
-        fallback_data = self._get('/cgi-bin/summary_data', params={'date': fallback_date.strftime('%Y-%m-%d'), 'temp': 'pin'})
-        fallback_rows = self._parse_summary_data_rows(fallback_data, base_date=fallback_date, value_mode='power')
+        fallback_data = self._get(
+            "/cgi-bin/summary_data",
+            params={"date": fallback_date.strftime("%Y-%m-%d"), "temp": "pin"},
+        )
+        fallback_rows = self._parse_summary_data_rows(
+            fallback_data, base_date=fallback_date, value_mode="power"
+        )
         return fallback_date, fallback_data, self._latest_populated_row(fallback_rows)
 
     def _build_topology(self) -> None:
@@ -354,7 +390,9 @@ class TigoCCAClient:
         system = self._make_system()
         return TigoPage(items=[system], total=1, page=1, limit=1, raw={})
 
-    def get_system(self, system_id: int, *, include: list[str] | None = None) -> TigoSystem:
+    def get_system(
+        self, system_id: int, *, include: list[str] | None = None
+    ) -> TigoSystem:
         return self._make_system()
 
     def get_layout(self, system_id: int) -> TigoSystemLayout:
@@ -362,9 +400,11 @@ class TigoCCAClient:
         nodes_by_id = {str(n["id"]): n for n in self._config_nodes}
 
         root = next((n for n in self._config_nodes if n.get("type") == 1), None)
-        inv_ids = root.get("children", []) if root else [
-            n["id"] for n in self._config_nodes if n.get("type") == 4
-        ]
+        inv_ids = (
+            root.get("children", [])
+            if root
+            else [n["id"] for n in self._config_nodes if n.get("type") == 4]
+        )
 
         inverters: list[TigoInverterLayout] = []
         inverter_seq = 0
@@ -390,45 +430,51 @@ class TigoCCAClient:
                     object_id = self._panel_object_ids.get(label)
                     if object_id is None:
                         continue
-                    panels.append(TigoPanelLayout(
-                        panel_id=object_id,
-                        label=label,
-                        short_label=label,
-                        serial=None,
-                        panel_type=None,
-                        source_id=_SYNTHETIC_SOURCE_ID,
-                        object_id=object_id,
-                        panel_type_id=None,
-                        raw={},
-                    ))
+                    panels.append(
+                        TigoPanelLayout(
+                            panel_id=object_id,
+                            label=label,
+                            short_label=label,
+                            serial=None,
+                            panel_type=None,
+                            source_id=_SYNTHETIC_SOURCE_ID,
+                            object_id=object_id,
+                            panel_type_id=None,
+                            raw={},
+                        )
+                    )
 
                 # Synthesize one MPPT per string — the CCA has no MPPT layer
-                mppts.append(TigoMpptLayout(
-                    mppt_id=string_seq,
-                    label=f"MPPT-{str_label}",
-                    strings=[
-                        TigoStringLayout(
-                            string_id=string_seq,
-                            label=str_label,
-                            short_label=str_label,
-                            object_id=None,
-                            panels=panels,
-                            raw=str_node,
-                        )
-                    ],
-                    raw={},
-                ))
+                mppts.append(
+                    TigoMpptLayout(
+                        mppt_id=string_seq,
+                        label=f"MPPT-{str_label}",
+                        strings=[
+                            TigoStringLayout(
+                                string_id=string_seq,
+                                label=str_label,
+                                short_label=str_label,
+                                object_id=None,
+                                panels=panels,
+                                raw=str_node,
+                            )
+                        ],
+                        raw={},
+                    )
+                )
 
-            inverters.append(TigoInverterLayout(
-                inverter_id=inverter_seq,
-                inverter_type_id=None,
-                label=inv_node.get("label") or f"Inverter {inverter_seq}",
-                object_id=None,
-                source_id=_SYNTHETIC_SOURCE_ID,
-                serial=None,
-                mppts=mppts,
-                raw=inv_node,
-            ))
+            inverters.append(
+                TigoInverterLayout(
+                    inverter_id=inverter_seq,
+                    inverter_type_id=None,
+                    label=inv_node.get("label") or f"Inverter {inverter_seq}",
+                    object_id=None,
+                    source_id=_SYNTHETIC_SOURCE_ID,
+                    serial=None,
+                    mppts=mppts,
+                    raw=inv_node,
+                )
+            )
 
         return TigoSystemLayout(system_id=system_id, inverters=inverters, raw={})
 
@@ -518,7 +564,11 @@ class TigoCCAClient:
         try:
             if latest_row is not None:
                 local_ts, values_by_label = latest_row
-                numeric = [v for v in values_by_label.values() if isinstance(v, (int, float)) and v >= 0]
+                numeric = [
+                    v
+                    for v in values_by_label.values()
+                    if isinstance(v, (int, float)) and v >= 0
+                ]
                 last_power = float(sum(numeric))
                 updated_on = self._local_to_utc(local_ts)
             if updated_on is None and data is not None:
@@ -532,7 +582,7 @@ class TigoCCAClient:
 
         return TigoSummary(
             lifetime_energy_dc=None,  # Not available from local CCA
-            ytd_energy_dc=None,       # Not available from local CCA
+            ytd_energy_dc=None,  # Not available from local CCA
             daily_energy_dc=daily_energy,
             last_power_dc=last_power,
             updated_on=updated_on,
@@ -570,15 +620,19 @@ class TigoCCAClient:
             "Iin": (None, "derived_iin"),
         }
         if self.enable_raw_temp_variants:
-            param_specs.update({
-                "Tmod": ("tmod", "raw"),
-                "Tcell": ("tcell", "raw"),
-                "Tamb": ("tamb", "raw"),
-                "Power": ("power", "raw"),
-            })
+            param_specs.update(
+                {
+                    "Tmod": ("tmod", "raw"),
+                    "Tcell": ("tcell", "raw"),
+                    "Tamb": ("tamb", "raw"),
+                    "Power": ("power", "raw"),
+                }
+            )
         spec = param_specs.get(param)
         if spec is None:
-            logger.debug("Param %s not supported by local CCA; returning empty table", param)
+            logger.debug(
+                "Param %s not supported by local CCA; returning empty table", param
+            )
             return TigoCSVTable(headers=[], rows=[], raw_text="")
         temp_name, value_mode = spec
 
@@ -597,18 +651,28 @@ class TigoCCAClient:
         while query_date <= local_end.date():
             try:
                 if value_mode == "derived_iin":
-                    pin_rows = self._fetch_day_rows(query_date, "pin", "power", local_start, local_end)
-                    vin_rows = self._fetch_day_rows(query_date, "vin", "vin", local_start, local_end)
+                    pin_rows = self._fetch_day_rows(
+                        query_date, "pin", "power", local_start, local_end
+                    )
+                    vin_rows = self._fetch_day_rows(
+                        query_date, "vin", "vin", local_start, local_end
+                    )
                     day_rows = self._derive_current_rows(pin_rows, vin_rows)
                 else:
                     assert temp_name is not None  # only derived_iin has no source table
-                    day_rows = self._fetch_day_rows(query_date, temp_name, value_mode, local_start, local_end)
+                    day_rows = self._fetch_day_rows(
+                        query_date, temp_name, value_mode, local_start, local_end
+                    )
                 all_rows.extend(day_rows)
             except Exception:
-                logger.debug("Failed to fetch %s data for %s", param, query_date, exc_info=True)
+                logger.debug(
+                    "Failed to fetch %s data for %s", param, query_date, exc_info=True
+                )
             query_date = date.fromordinal(query_date.toordinal() + 1)
 
-        wanted_ids = object_ids if object_ids else sorted(self._object_id_to_label.keys())
+        wanted_ids = (
+            object_ids if object_ids else sorted(self._object_id_to_label.keys())
+        )
         headers = ["Timestamp"] + [str(oid) for oid in wanted_ids]
 
         csv_rows: list[TigoCSVRow] = []
@@ -616,7 +680,8 @@ class TigoCCAClient:
             utc_ts = self._local_to_utc(local_ts)
             row_values: dict[str, float | None] = {
                 str(oid): values_by_label.get(self._object_id_to_label[oid])
-                if oid in self._object_id_to_label else None
+                if oid in self._object_id_to_label
+                else None
                 for oid in wanted_ids
             }
             csv_rows.append(TigoCSVRow(timestamp=utc_ts, values=row_values))
@@ -636,7 +701,9 @@ class TigoCCAClient:
             "/cgi-bin/summary_data",
             params={"date": query_date.strftime("%Y-%m-%d"), "temp": temp_name},
         )
-        rows = self._parse_summary_data_rows(data, base_date=query_date, value_mode=value_mode)
+        rows = self._parse_summary_data_rows(
+            data, base_date=query_date, value_mode=value_mode
+        )
         return [
             (local_ts, values)
             for local_ts, values in rows
@@ -660,7 +727,9 @@ class TigoCCAClient:
                     continue
                 try:
                     h, m = map(int, t_str.split(":"))
-                    local_ts = datetime(base_date.year, base_date.month, base_date.day, h, m)
+                    local_ts = datetime(
+                        base_date.year, base_date.month, base_date.day, h, m
+                    )
                 except (ValueError, TypeError):
                     continue
 
@@ -673,7 +742,9 @@ class TigoCCAClient:
                     elif value_mode == "vin":
                         values[label] = float(raw) / vin_scale
                     else:
-                        values[label] = float(raw) if isinstance(raw, (int, float)) else None
+                        values[label] = (
+                            float(raw) if isinstance(raw, (int, float)) else None
+                        )
                 rows.append((local_ts, values))
         rows.sort(key=lambda item: item[0])
         return rows
@@ -729,6 +800,7 @@ class TigoCCAClient:
 # ------------------------------------------------------------------
 # Private parsing helpers
 # ------------------------------------------------------------------
+
 
 def _parse_iso(value: str) -> datetime | None:
     for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S"):

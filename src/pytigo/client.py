@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+
 from requests import Session
 
 from .models import (
@@ -41,7 +42,9 @@ logger = logging.getLogger(__name__)
 def _validate_level(value: str, name: str) -> None:
     if value not in CLOUD_AGGREGATE_LEVELS:
         allowed = ", ".join(sorted(CLOUD_AGGREGATE_LEVELS))
-        raise ValueError(f"Unsupported {name} {value!r}; the Tigo cloud API accepts: {allowed}")
+        raise ValueError(
+            f"Unsupported {name} {value!r}; the Tigo cloud API accepts: {allowed}"
+        )
 
 
 class TigoClient:
@@ -68,8 +71,14 @@ class TigoClient:
             return
         allowed = ", ".join(sorted(CLOUD_AGGREGATE_PARAMS))
         if self.strict_params:
-            raise ValueError(f"Unsupported aggregate param {param!r}; the Tigo cloud API accepts: {allowed}")
-        logger.warning("Aggregate param %r is not accepted by the Tigo cloud API (allowed: %s); expect HTTP 400", param, allowed)
+            raise ValueError(
+                f"Unsupported aggregate param {param!r}; the Tigo cloud API accepts: {allowed}"
+            )
+        logger.warning(
+            "Aggregate param %r is not accepted by the Tigo cloud API (allowed: %s); expect HTTP 400",
+            param,
+            allowed,
+        )
 
     def _headers(self) -> dict[str, str]:
         if not self.auth:
@@ -109,7 +118,9 @@ class TigoClient:
     def get_current_user(self, user_id: int | None = None) -> TigoUser:
         if user_id is None:
             if not self.auth:
-                raise ValueError("user_id is required before login; after login it defaults to auth.user_id")
+                raise ValueError(
+                    "user_id is required before login; after login it defaults to auth.user_id"
+                )
             user_id = self.auth.user_id
         logger.debug("GET /users/%s", user_id)
         response = self.session.get(
@@ -120,7 +131,13 @@ class TigoClient:
         response.raise_for_status()
         return parse_user_response(response.json())
 
-    def list_systems(self, *, page: int | None = None, limit: int | None = None, sort: str | None = None) -> TigoPage[TigoSystem]:
+    def list_systems(
+        self,
+        *,
+        page: int | None = None,
+        limit: int | None = None,
+        sort: str | None = None,
+    ) -> TigoPage[TigoSystem]:
         params: dict[str, int | str] = {}
         if page is not None:
             params["page"] = page
@@ -138,7 +155,9 @@ class TigoClient:
         response.raise_for_status()
         return parse_systems_response(response.json())
 
-    def get_system(self, system_id: int, *, include: list[str] | None = None) -> TigoSystem:
+    def get_system(
+        self, system_id: int, *, include: list[str] | None = None
+    ) -> TigoSystem:
         params: dict[str, str | int] = {"id": system_id}
         if include:
             params["include"] = ",".join(include)
@@ -245,7 +264,12 @@ class TigoClient:
             params["header"] = header
         if sensors is not None:
             params["sensors"] = "true" if sensors else "false"
-        logger.debug("GET /data/aggregate system_id=%s param=%s level=%s", system_id, param, level)
+        logger.debug(
+            "GET /data/aggregate system_id=%s param=%s level=%s",
+            system_id,
+            param,
+            level,
+        )
         response = self.session.get(
             f"{self.api_root}/data/aggregate",
             headers=self._headers(),

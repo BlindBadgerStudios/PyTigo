@@ -5,4 +5,10 @@ from .protocol import TigoClientProtocol
 
 __version__ = "0.4.5"
 
-__all__ = ["TigoClient", "TigoCCAClient", "TigoClientProtocol", "TigoPage", "__version__"]
+__all__ = [
+    "TigoCCAClient",
+    "TigoClient",
+    "TigoClientProtocol",
+    "TigoPage",
+    "__version__",
+]

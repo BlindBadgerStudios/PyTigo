@@ -18,14 +18,16 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-UTC = timezone.utc
+UTC = UTC
 
 from pytigo import TigoCCAClient
 
 
-def _find_latest_nonzero_row(client: TigoCCAClient, system_id: int, object_ids: list[int], end: datetime) -> tuple[datetime | None, dict[str, float | None]]:
+def _find_latest_nonzero_row(
+    client: TigoCCAClient, system_id: int, object_ids: list[int], end: datetime
+) -> tuple[datetime | None, dict[str, float | None]]:
     """
     Find the latest timestamp with any non-zero Pin telemetry.
 
@@ -103,12 +105,14 @@ def main() -> None:
             for string in mppt.strings:
                 for panel in string.panels:
                     if panel.object_id is not None:
-                        panels.append({
-                            "object_id": int(panel.object_id),
-                            "label": panel.label or f"panel_{panel.panel_id}",
-                            "inverter": inverter.label or str(inverter.inverter_id),
-                            "string": string.label or str(string.string_id),
-                        })
+                        panels.append(
+                            {
+                                "object_id": int(panel.object_id),
+                                "label": panel.label or f"panel_{panel.panel_id}",
+                                "inverter": inverter.label or str(inverter.inverter_id),
+                                "string": string.label or str(string.string_id),
+                            }
+                        )
 
     if not panels:
         print("No panels found in layout.")
@@ -126,7 +130,9 @@ def main() -> None:
 
     latest_ts, _ = _find_latest_nonzero_row(client, system_id, object_ids, search_end)
     if latest_ts is None:
-        print("No non-zero Pin telemetry found between local midnight and the latest device timestamp.")
+        print(
+            "No non-zero Pin telemetry found between local midnight and the latest device timestamp."
+        )
         sys.exit(0)
 
     end = latest_ts
@@ -134,7 +140,9 @@ def main() -> None:
     start_str = start.strftime("%Y-%m-%dT%H:%M:%S")
     end_str = end.strftime("%Y-%m-%dT%H:%M:%S")
 
-    print(f"\nFetching Pin telemetry around latest populated sample ({window_minutes}-min window: {start_str} → {end_str} UTC)...")
+    print(
+        f"\nFetching Pin telemetry around latest populated sample ({window_minutes}-min window: {start_str} → {end_str} UTC)..."
+    )
     table = client.get_aggregate(
         system_id,
         start=start_str,
@@ -161,7 +169,9 @@ def main() -> None:
         if len(latest) == len(panels):
             break
 
-    print(f"\n--- Per-Panel Power (most recent sample in latest populated {window_minutes}-min window) ---")
+    print(
+        f"\n--- Per-Panel Power (most recent sample in latest populated {window_minutes}-min window) ---"
+    )
     header = f"{'Label':<12} {'Inverter':<14} {'String':<12} {'Power (W)':>10}  {'Timestamp (UTC)'}"
     print(header)
     print("-" * len(header))
@@ -174,7 +184,9 @@ def main() -> None:
             ts, power = latest[oid]
             total_power += power
             ts_str = ts.strftime("%H:%M:%S") if ts else "?"
-            print(f"  {panel['label']:<10} {panel['inverter']:<14} {panel['string']:<12} {power:>10.1f}  {ts_str}")
+            print(
+                f"  {panel['label']:<10} {panel['inverter']:<14} {panel['string']:<12} {power:>10.1f}  {ts_str}"
+            )
         else:
             missing.append(panel["label"])
 
